@@ -1,0 +1,16 @@
+.git/
+
+*.exe
+*.test
+*.out
+bin/
+pkg/
+
+.env
+*.tmp
+
+/vendor/
+/vendor/
+
+.idea/
+.vscode/
