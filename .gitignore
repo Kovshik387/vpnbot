@@ -10,7 +10,6 @@ pkg/
 *.tmp
 
 /vendor/
-/vendor/
 
 .idea/
 .vscode/
