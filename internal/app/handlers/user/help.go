@@ -1,30 +1,50 @@
-﻿package user
+package user
 
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 )
 
-func Help(update tgbotapi.Update, bot *tgbotapi.BotAPI, userId int64) {
+func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) {
 	text := "Доступные команды:\n" +
 		"/start - запустить бота\n" +
 		"/help - список команд\n" +
 		"/ping - проверить ru сервер\n"
 
-	if userId == update.Message.From.ID {
-		text += "/adduser - добавить пользователя\n" +
-			"/deleteuser - удалить пользователя\n" +
-			"/users - просмотреть список пользователей, аргумент -name ищет конкретного\n"
-	}
-
-	// Кнопки для help
-	btnKey := tgbotapi.NewInlineKeyboardButtonData("🔑 Запросить ключ", "request_key")
-	btnPing := tgbotapi.NewInlineKeyboardButtonData("🏓 Проверить ping", "ping_server")
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(btnKey, btnPing),
+	var (
+		chatId int64
+		msgId  int
 	)
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+	if update.Message == nil {
+		chatId = update.CallbackQuery.Message.Chat.ID
+		msgId = update.CallbackQuery.Message.MessageID
+	} else {
+		chatId = update.Message.Chat.ID
+	}
+
+	if msgId != 0 {
+		_, _ = bot.Request(tgbotapi.NewDeleteMessage(chatId, msgId))
+	}
+
+	if adminId == chatId {
+		text += "/adduser - добавить пользователя\n" +
+			"/deleteuser - удалить пользователя\n" +
+			"/users - просмотреть список пользователей, аргумент -name ищет конкретного\n" +
+			"/block - заблокировать пользователя\n" +
+			"/unblock - разблокировать пользователя\n" +
+			"/blocked - посмотреть заблокированный пользователей\n"
+	}
+
+	btnKey := tgbotapi.NewInlineKeyboardButtonData("🔑 Запросить ключ", "request_key")
+	btnPing := tgbotapi.NewInlineKeyboardButtonData("🏓 Проверить ping", "ping_server")
+	btnSub := tgbotapi.NewInlineKeyboardButtonData("🔓 Проверить подписку", "subscribe")
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(btnKey, btnPing),
+		tgbotapi.NewInlineKeyboardRow(btnSub),
+	)
+
+	msg := tgbotapi.NewMessage(chatId, text)
 	msg.ReplyMarkup = keyboard
 
 	_, err := bot.Send(msg)

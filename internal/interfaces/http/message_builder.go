@@ -1,4 +1,4 @@
-﻿package interfaces
+package interfaces
 
 import (
 	"VpnBot/internal/domain/model"
@@ -56,7 +56,7 @@ func (*messageBuilder) SendUserInfo(user model.User) (string, error) {
 			"<b>Status:</b> %s\n"+
 			"<b>OnlineAt:</b> %s\n"+
 			"<b>Usage:</b> %.1f GB\n"+
-			"<b>Sub URL:</b> <a href=\"%s\">ссылка</a>\n"+
+			"<b>Sub URL QR+Key:</b> <a href=\"%s\">ссылка</a>\n"+
 			"<b>Link:</b> <tg-spoiler><code>%s</code></tg-spoiler>\n"+
 			"%s",
 		separator,

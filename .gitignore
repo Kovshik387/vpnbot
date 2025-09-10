@@ -5,7 +5,7 @@
 *.out
 bin/
 pkg/
-
+*.db
 .env
 *.tmp
 

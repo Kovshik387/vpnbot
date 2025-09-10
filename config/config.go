@@ -1,4 +1,4 @@
-﻿package config
+package config
 
 import (
 	"errors"
@@ -27,12 +27,13 @@ func LoadConfig() (*Config, error) {
 	usernameApi := os.Getenv("USERNAME_API")
 	passwordApi := os.Getenv("PASSWORD_API")
 	marzbanUrl := os.Getenv("MARZBAN_URL")
+	russianUrl := os.Getenv("RUSSIAN_URL")
 
 	if usernameApi == "" || passwordApi == "" || marzbanUrl == "" {
 		return nil, errors.New("ссылка, пользователь или пароль администратора отсутствуют")
 	}
 
-	if russianUrl := os.Getenv("RUSSIAN_URL"); russianUrl == "" {
+	if russianUrl == "" {
 		return nil, errors.New("ссылка на ru сервер отсутствует")
 	}
 
@@ -48,5 +49,6 @@ func LoadConfig() (*Config, error) {
 		UsernameApi: usernameApi,
 		PasswordApi: passwordApi,
 		MarzbanUrl:  marzbanUrl,
+		RussianUrl:  russianUrl,
 	}, nil
 }

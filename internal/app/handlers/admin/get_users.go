@@ -1,4 +1,4 @@
-﻿package admin
+package admin
 
 import (
 	"VpnBot/internal/app/usecases"
@@ -7,7 +7,7 @@ import (
 	"log"
 )
 
-func UserList(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase) {
+func UserListHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase) {
 	users, err := userUC.ListUsers()
 	if err != nil {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка при получении пользователей: "+err.Error())

@@ -1,30 +1,48 @@
-﻿package user
+package user
 
 import (
-	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"io"
 	"log"
-	"net"
+	"net/http"
 	"time"
 )
 
-func Ping(update tgbotapi.Update, bot *tgbotapi.BotAPI, yBlockUrl string) {
-	timeout := 2 * time.Second
-	conn, err := net.DialTimeout("tcp", yBlockUrl, timeout)
+func PingHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, yBlockUrl string, adminId int64) {
+	var chatId int64
+
+	if update.Message != nil {
+		chatId = update.Message.Chat.ID
+	} else if update.CallbackQuery != nil {
+		chatId = update.CallbackQuery.Message.Chat.ID
+	}
+
+	client := &http.Client{
+		Timeout: 1 * time.Second,
+	}
+
+	resp, err := client.Get(yBlockUrl)
 	if err != nil {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "🇷🇺 Сервер недоступен ❌")
-		_, _ = bot.Send(msg)
+		log.Println(err)
+		sendMessage(bot, chatId, "🇷🇺 Сервер недоступен ❌")
 		return
 	}
-	defer func(conn net.Conn) {
-		err := conn.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
-	}(conn)
+	}(resp.Body)
 
-	fmt.Println("✅ Сервер доступен:", yBlockUrl)
+	if resp.StatusCode != http.StatusOK {
+		sendMessage(bot, chatId, "🇷🇺 Сервер недоступен ❌")
+	}
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "🇷🇺 Сервер доступен ✅")
+	sendMessage(bot, chatId, "🇷🇺 Сервер доступен ✅")
+	HelpHandler(update, bot, adminId)
+}
+
+func sendMessage(bot *tgbotapi.BotAPI, chatId int64, mes string) {
+	msg := tgbotapi.NewMessage(chatId, mes)
 	_, _ = bot.Send(msg)
 }

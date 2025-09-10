@@ -1,4 +1,4 @@
-﻿package admin
+package admin
 
 import (
 	"VpnBot/internal/app/usecases"
@@ -7,7 +7,7 @@ import (
 	"log"
 )
 
-func SearchUser(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase, name string) {
+func SearchUserHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase, name string) {
 	user, err := userUC.SearchUser(name)
 	if err != nil {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка при получения пользователя: "+err.Error())

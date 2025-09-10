@@ -1,4 +1,4 @@
-﻿package admin
+package admin
 
 import (
 	"VpnBot/internal/app/usecases"
@@ -9,7 +9,6 @@ import (
 )
 
 func AddUserHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase, username string) {
-
 	user, err := userUC.AddUser(username)
 	if err != nil {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка при создании: "+err.Error())
@@ -33,5 +32,4 @@ func AddUserHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecas
 	if sendErr != nil {
 		log.Println("Ошибка при отправке пользователя:", sendErr)
 	}
-
 }
