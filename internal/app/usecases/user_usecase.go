@@ -46,6 +46,6 @@ func (u *UserUsecase) CheckBlock(uid int64) (bool, error) {
 func (u *UserUsecase) UserExist(uid int64) (bool, error) {
 	return u.userRepository.UserExist(uid)
 }
-func (u *UserUsecase) ListBlocked() ([]model.BlockedModel, error) {
+func (u *UserUsecase) ListBlocked() ([]model.TgUserModel, error) {
 	return u.userRepository.GetBlocked()
 }

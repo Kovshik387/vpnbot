@@ -6,6 +6,7 @@ import (
 	"VpnBot/internal/app/usecases"
 	"VpnBot/internal/domain/repository"
 	interfaces "VpnBot/internal/interfaces/http"
+	"VpnBot/internal/interfaces/jobs"
 	"database/sql"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
@@ -60,6 +61,11 @@ func main() {
 
 	userUC := usecases.NewUserUsecase(client, ur)
 	cooldownUC := usecases.NewCooldownUsecase(cr)
+	reminderUC := usecases.NewReminderUsecase(ur)
+
+	reminderJob := jobs.NewReminderJob(reminderUC, bot)
+
+	reminderJob.Start()
 
 	commandRouter := router.NewCommandRouter(userUC, cfg)
 	callbackRouter := router.NewCallbackRouter(userUC, cooldownUC, cfg)

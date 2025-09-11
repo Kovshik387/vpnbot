@@ -77,9 +77,9 @@ select 1
 	return true, nil
 }
 
-func (r *UserRepository) GetBlocked() ([]model.BlockedModel, error) {
+func (r *UserRepository) GetBlocked() ([]model.TgUserModel, error) {
 	rows, err := r.db.Query(`
-select user_id, username
+select user_id, username, is_block
   from users
  where is_block = true`)
 
@@ -93,10 +93,43 @@ select user_id, username
 		}
 	}(rows)
 
-	var users []model.BlockedModel
+	var users []model.TgUserModel
 	for rows.Next() {
-		var u model.BlockedModel
-		err := rows.Scan(&u.Uid, &u.Username)
+		var u model.TgUserModel
+		err := rows.Scan(&u.Uid, &u.Username, &u.IsBlock)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func (r *UserRepository) GetActive() ([]model.TgUserModel, error) {
+	rows, err := r.db.Query(`
+select user_id, username, is_block
+  from users
+ where is_block = false`)
+
+	if err != nil {
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println(err)
+		}
+	}(rows)
+
+	var users []model.TgUserModel
+	for rows.Next() {
+		var u model.TgUserModel
+		err := rows.Scan(&u.Uid, &u.Username, &u.IsBlock)
 		if err != nil {
 			return nil, err
 		}

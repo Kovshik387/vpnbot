@@ -1,6 +1,7 @@
 package model
 
-type BlockedModel struct {
+type TgUserModel struct {
 	Uid      int64
 	Username string
+	IsBlock  bool
 }
