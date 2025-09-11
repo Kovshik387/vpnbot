@@ -1,7 +1,7 @@
-﻿package service
+package service
 
 import "VpnBot/internal/domain/model"
 
 type MessageService interface {
-	SendUserInfo(user model.User) (string, error)
+	SendUserInfo(user model.User) (string, bool, error)
 }

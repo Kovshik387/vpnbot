@@ -50,7 +50,7 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 			username := args[1]
 			admin.SearchUserHandler(update, bot, userUC, username)
 		} else {
-			admin.UserListHandler(update, bot, userUC)
+			admin.UserListHandler(update, bot, userUC, false)
 		}
 	}
 

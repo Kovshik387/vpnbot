@@ -16,12 +16,12 @@ func NewMessageBuilder() service.MessageService {
 	return &messageBuilder{}
 }
 
-func (*messageBuilder) SendUserInfo(user model.User) (string, error) {
+func (*messageBuilder) SendUserInfo(user model.User) (string, bool, error) {
 	now := time.Now().Add(3 * time.Hour)
 	separator := "----------------------------------------\n"
 
 	dateFlag := false
-
+	isActive := false
 	onlineAt, err := time.Parse("2006-01-02T15:04:05.999999", user.OnlineAt)
 	if err != nil {
 		log.Printf("Не удалось распарсить время для пользователя %s: %v\n", user.Username, err)
@@ -32,6 +32,7 @@ func (*messageBuilder) SendUserInfo(user model.User) (string, error) {
 	var statusStr string
 	if now.Sub(onlineAt) <= 5*time.Minute {
 		statusStr = "Активен сейчас"
+		isActive = true
 	} else {
 		duration := now.Sub(onlineAt)
 		days := int(duration.Hours()) / 24
@@ -69,7 +70,7 @@ func (*messageBuilder) SendUserInfo(user model.User) (string, error) {
 		separator,
 	)
 
-	return response, nil
+	return response, isActive, nil
 }
 
 func htmlEscape(s string) string {

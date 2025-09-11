@@ -7,7 +7,7 @@ import (
 	"log"
 )
 
-func UserListHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase) {
+func UserListHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase, isActive bool) {
 	users, err := userUC.ListUsers()
 	if err != nil {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка при получении пользователей: "+err.Error())
@@ -20,12 +20,17 @@ func UserListHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *useca
 		_, _ = bot.Send(msg)
 		return
 	}
+
 	mb := interfaces.NewMessageBuilder()
 	for _, u := range users.Users {
-
-		response, err := mb.SendUserInfo(u)
+		response, act, err := mb.SendUserInfo(u)
 		if err != nil {
-			log.Println("Ошибка при формировании сообщения")
+			log.Println("Ошибка при формировании сообщения:", err)
+			continue
+		}
+
+		if isActive && !act {
+			continue
 		}
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
