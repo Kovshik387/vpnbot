@@ -20,7 +20,7 @@ func AddUserHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecas
 	_, _ = bot.Send(msg)
 
 	mb := interfaces.NewMessageBuilder()
-	response, err := mb.SendUserInfo(user)
+	response, _, err := mb.SendUserInfo(user)
 	if err != nil {
 		log.Println("Ошибка при формировании сообщения")
 	}

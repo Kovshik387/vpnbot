@@ -48,7 +48,7 @@ func ApproveHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecas
 		}
 	}
 
-	info, err := interfaces.NewMessageBuilder().SendUserInfo(user)
+	info, _, err := interfaces.NewMessageBuilder().SendUserInfo(user)
 	if err != nil {
 		return
 	}

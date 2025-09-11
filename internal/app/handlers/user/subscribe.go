@@ -25,7 +25,7 @@ func GetSubscribeHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *u
 
 	mb := interfaces.NewMessageBuilder()
 
-	response, err := mb.SendUserInfo(user)
+	response, _, err := mb.SendUserInfo(user)
 	if err != nil {
 		log.Println("Ошибка при формировании сообщения")
 	}
