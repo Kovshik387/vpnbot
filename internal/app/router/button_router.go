@@ -49,13 +49,6 @@ func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsec
 		"info": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			user.InfoHandler(update, bot)
 		},
-		"activity": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-			err := checkCallbackPermission(update, bot, config.AdminId)
-			if err != nil {
-				return
-			}
-			admin.UserListHandler(update, bot, userUC, true)
-		},
 		"info_phone": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			deletePreview(update, bot)
 			text := "📱 Инструкция для телефона:\n" +

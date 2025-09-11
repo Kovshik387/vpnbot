@@ -54,6 +54,12 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 		}
 	}
 
+	baseHandlers["activity"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		checkPermission(update, bot, config.AdminId)
+
+		admin.UserListHandler(update, bot, userUC, true)
+	}
+
 	baseHandlers["deleteuser"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		checkPermission(update, bot, config.AdminId)
 
