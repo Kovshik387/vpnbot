@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -14,6 +15,7 @@ type Config struct {
 	PasswordApi string
 	MarzbanUrl  string
 	RussianUrl  string
+	SkebobUrls  []string
 }
 
 func LoadConfig() (*Config, error) {
@@ -28,6 +30,7 @@ func LoadConfig() (*Config, error) {
 	passwordApi := os.Getenv("PASSWORD_API")
 	marzbanUrl := os.Getenv("MARZBAN_URL")
 	russianUrl := os.Getenv("RUSSIAN_URL")
+	rawSkebob := os.Getenv("SKEBOB_URLS")
 
 	if usernameApi == "" || passwordApi == "" || marzbanUrl == "" {
 		return nil, errors.New("ссылка, пользователь или пароль администратора отсутствуют")
@@ -50,5 +53,6 @@ func LoadConfig() (*Config, error) {
 		PasswordApi: passwordApi,
 		MarzbanUrl:  marzbanUrl,
 		RussianUrl:  russianUrl,
+		SkebobUrls:  strings.Split(rawSkebob, ","),
 	}, nil
 }
