@@ -84,7 +84,7 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 
 	baseHandlers["skebob"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		log.Printf("Скебоб)")
-		user.Skebob(update, bot, config.SkebobUrls)
+		user.Skebob(update, bot, userUC, config.SkebobUrls)
 	}
 
 	baseHandlers["unblock"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {

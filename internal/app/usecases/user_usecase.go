@@ -9,11 +9,12 @@ import (
 type UserUsecase struct {
 	marzbanClient  service.MarzbanService
 	userRepository *repository.UserRepository
+	yandexClient   service.YandexService
 }
 
 func NewUserUsecase(marzbanClient service.MarzbanService, userRepository *repository.UserRepository,
 	yandexService service.YandexService) *UserUsecase {
-	return &UserUsecase{marzbanClient: marzbanClient, userRepository: userRepository}
+	return &UserUsecase{marzbanClient: marzbanClient, userRepository: userRepository, yandexClient: yandexService}
 }
 
 func (u *UserUsecase) ListUsers() (model.UsersResponse, error) {
@@ -54,4 +55,8 @@ func (u *UserUsecase) ListBlocked() ([]model.TgUserModel, error) {
 
 func (u *UserUsecase) ListActive() ([]model.TgUserModel, error) {
 	return u.userRepository.GetActive()
+}
+
+func (u *UserUsecase) Skebob(url string) (string, error) {
+	return u.yandexClient.GetYandexDirectLink(url)
 }
