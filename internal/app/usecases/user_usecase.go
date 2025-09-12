@@ -11,7 +11,8 @@ type UserUsecase struct {
 	userRepository *repository.UserRepository
 }
 
-func NewUserUsecase(marzbanClient service.MarzbanService, userRepository *repository.UserRepository) *UserUsecase {
+func NewUserUsecase(marzbanClient service.MarzbanService, userRepository *repository.UserRepository,
+	yandexService service.YandexService) *UserUsecase {
 	return &UserUsecase{marzbanClient: marzbanClient, userRepository: userRepository}
 }
 
@@ -46,6 +47,11 @@ func (u *UserUsecase) CheckBlock(uid int64) (bool, error) {
 func (u *UserUsecase) UserExist(uid int64) (bool, error) {
 	return u.userRepository.UserExist(uid)
 }
+
 func (u *UserUsecase) ListBlocked() ([]model.TgUserModel, error) {
 	return u.userRepository.GetBlocked()
+}
+
+func (u *UserUsecase) ListActive() ([]model.TgUserModel, error) {
+	return u.userRepository.GetActive()
 }

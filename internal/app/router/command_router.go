@@ -70,6 +70,20 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 
 		admin.DeleteUserHandler(update, bot, userUC, args)
 	}
+	baseHandlers["say"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		checkPermission(update, bot, config.AdminId)
+
+		args, err := checkArgs(update, bot, "Использование: /say <text>")
+		if err != nil {
+			return
+		}
+
+		admin.SayHandler(update, bot, userUC, args)
+	}
+
+	baseHandlers["скебоб"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		user.Skebob(update, bot, config.SkebobUrls)
+	}
 
 	baseHandlers["unblock"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		checkPermission(update, bot, config.AdminId)

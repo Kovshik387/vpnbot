@@ -36,7 +36,8 @@ func main() {
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
 
-	client := interfaces.NewMarzbanClient(cfg.MarzbanUrl, cfg.UsernameApi, cfg.PasswordApi)
+	marzbanClient := interfaces.NewMarzbanClient(cfg.MarzbanUrl, cfg.UsernameApi, cfg.PasswordApi)
+	yandexClient := interfaces.NewYandexClient()
 
 	db, err := sql.Open("sqlite", "data/bot.db") // путь к базе
 	if err != nil {
@@ -59,7 +60,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	userUC := usecases.NewUserUsecase(client, ur)
+	userUC := usecases.NewUserUsecase(marzbanClient, ur, yandexClient)
 	cooldownUC := usecases.NewCooldownUsecase(cr)
 	reminderUC := usecases.NewReminderUsecase(ur)
 
