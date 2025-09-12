@@ -3,9 +3,9 @@ package interfaces
 import (
 	"VpnBot/internal/domain/model"
 	"VpnBot/internal/domain/ports/service"
+	"VpnBot/internal/utils"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 )
 
@@ -61,9 +61,9 @@ func (*messageBuilder) SendUserInfo(user model.User) (string, bool, error) {
 			"<b>Link:</b> <tg-spoiler><code>%s</code></tg-spoiler>\n"+
 			"%s",
 		separator,
-		htmlEscape(user.Username),
-		htmlEscape(statusStr),
-		htmlEscape(onlineAtStr),
+		utils.HtmlEscape(user.Username),
+		utils.HtmlEscape(statusStr),
+		utils.HtmlEscape(onlineAtStr),
 		usage,
 		user.SubscribedUrl,
 		user.Links[0],
@@ -71,14 +71,4 @@ func (*messageBuilder) SendUserInfo(user model.User) (string, bool, error) {
 	)
 
 	return response, isActive, nil
-}
-
-func htmlEscape(s string) string {
-	replacer := strings.NewReplacer(
-		"&", "&amp;",
-		"<", "&lt;",
-		">", "&gt;",
-		"\"", "&quot;",
-	)
-	return replacer.Replace(s)
 }

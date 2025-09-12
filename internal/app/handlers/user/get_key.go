@@ -2,6 +2,7 @@ package user
 
 import (
 	"VpnBot/internal/app/usecases"
+	"VpnBot/internal/utils"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -27,7 +28,7 @@ func GetKeyHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, cdUC *usecases.
 		"Запрос на ключ:\n"+
 			"Пользователь: @%s\n"+
 			"ID: `%d`",
-		username, uid,
+		utils.EscapeMarkdownV2(username), uid,
 	)
 	approveBtn := tgbotapi.NewInlineKeyboardButtonData("✅ Одобрить", fmt.Sprintf("approve:%d %s",
 		uid, username))
