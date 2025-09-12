@@ -7,6 +7,7 @@ import (
 	"VpnBot/internal/app/usecases"
 	"errors"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"log"
 	"strings"
 )
 
@@ -81,7 +82,8 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 		admin.SayHandler(update, bot, userUC, args)
 	}
 
-	baseHandlers["скебоб"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+	baseHandlers["skebob"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		log.Printf("Скебоб)")
 		user.Skebob(update, bot, config.SkebobUrls)
 	}
 
