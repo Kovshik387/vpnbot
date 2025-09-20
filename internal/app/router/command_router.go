@@ -8,6 +8,7 @@ import (
 	"errors"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
+	"strconv"
 	"strings"
 )
 
@@ -33,7 +34,11 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 	}
 
 	baseHandlers["adduser"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		checkPermission(update, bot, config.AdminId)
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
 		args, err := checkArgs(update, bot, "Использование: /adduser <username>")
 		if err != nil {
@@ -44,7 +49,12 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 	}
 
 	baseHandlers["users"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		checkPermission(update, bot, config.AdminId)
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
 		args := strings.Fields(update.Message.Text)
 
 		if len(args) > 1 {
@@ -56,13 +66,21 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 	}
 
 	baseHandlers["activity"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		checkPermission(update, bot, config.AdminId)
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
 		admin.UserListHandler(update, bot, userUC, true)
 	}
 
 	baseHandlers["deleteuser"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		checkPermission(update, bot, config.AdminId)
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
 		args, err := checkArgs(update, bot, "Использование: /deleteuser <username>")
 		if err != nil {
@@ -72,7 +90,11 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 		admin.DeleteUserHandler(update, bot, userUC, args)
 	}
 	baseHandlers["say"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		checkPermission(update, bot, config.AdminId)
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
 		args, err := checkArgs(update, bot, "Использование: /say <text>")
 		if err != nil {
@@ -88,7 +110,11 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 	}
 
 	baseHandlers["unblock"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		checkPermission(update, bot, config.AdminId)
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
 		args, err := checkArgs(update, bot, "Использование: /unblock <ID>")
 		if err != nil {
@@ -99,7 +125,11 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 	}
 
 	baseHandlers["blocked"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		checkPermission(update, bot, config.AdminId)
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
 		admin.UserBlockedHandler(update, bot, userUC)
 	}
@@ -118,10 +148,11 @@ func checkArgs(update tgbotapi.Update, bot *tgbotapi.BotAPI, str string) (string
 	return args, nil
 }
 
-func checkPermission(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) {
+func checkPermission(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) error {
 	if update.Message.From.ID != adminId {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "У тебя нет доступа к этой команде")
 		_, _ = bot.Send(msg)
-		return
+		return errors.New("У тебя нет доступа к этой команде" + strconv.Itoa(int(update.Message.From.ID)))
 	}
+	return nil
 }
