@@ -38,7 +38,7 @@ func PingHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, yBlockUrl string,
 		sendMessage(bot, chatId, "🇷🇺 Сервер недоступен ❌")
 	}
 
-	sendMessage(bot, chatId, "🇷🇺 Сервер доступен ✅")
+	sendMessage(bot, chatId, "🇦🇱 Сервер доступен ✅")
 	HelpHandler(update, bot, adminId)
 }
 
