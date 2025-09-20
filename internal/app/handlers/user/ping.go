@@ -24,7 +24,7 @@ func PingHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, yBlockUrl string,
 	resp, err := client.Get(yBlockUrl)
 	if err != nil {
 		log.Println(err)
-		sendMessage(bot, chatId, "🇷🇺 Сервер недоступен ❌")
+		sendMessage(bot, chatId, "🇦🇱 Сервер недоступен ❌")
 		return
 	}
 	defer func(Body io.ReadCloser) {
@@ -35,7 +35,7 @@ func PingHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, yBlockUrl string,
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		sendMessage(bot, chatId, "🇷🇺 Сервер недоступен ❌")
+		sendMessage(bot, chatId, "🇦🇱 Сервер недоступен ❌")
 	}
 
 	sendMessage(bot, chatId, "🇦🇱 Сервер доступен ✅")
