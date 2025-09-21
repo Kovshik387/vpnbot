@@ -66,49 +66,6 @@ func (m *marzbanClient) AddUser(username string) (model.User, error) {
 		return model.User{}, err
 	}
 
-	req, err := http.NewRequest("GET", m.baseUrl+"/api/inbounds/", nil)
-	if err != nil {
-		return model.User{}, err
-	}
-	req.Header.Add("Authorization", m.tokenType+" "+m.token)
-
-	resp, err := m.client.Do(req)
-	if err != nil {
-		return model.User{}, err
-	}
-
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Println(err)
-		}
-	}(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return model.User{}, errors.New("failed to get inbounds: " + string(body))
-	}
-
-	var inboundsResponse map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&inboundsResponse); err != nil {
-		return model.User{}, err
-	}
-
-	var vlessTags []string
-	for _, inbound := range inboundsResponse["results"].([]interface{}) {
-		ib := inbound.(map[string]interface{})
-		protocol := ib["protocol"].(string)
-		tag := ib["tag"].(string)
-		if protocol == "vless" {
-			vlessTags = append(vlessTags, tag)
-		}
-	}
-
-	// Проверка, что есть хотя бы один VLESS inbound
-	if len(vlessTags) == 0 {
-		return model.User{}, errors.New("no vless inbounds available on server")
-	}
-
 	var reqBody = dto.AddUserRequest{
 		Username:               username,
 		Status:                 "active",
@@ -119,7 +76,7 @@ func (m *marzbanClient) AddUser(username string) (model.User, error) {
 			"vless": {},
 		},
 		Inbounds: map[string][]string{
-			"vless": vlessTags,
+			"vless": {"TEAMDOCS", "VK"},
 		},
 		Note:                 "",
 		OnHoldTimeout:        time.Now().Format(time.RFC3339),
@@ -136,20 +93,21 @@ func (m *marzbanClient) AddUser(username string) (model.User, error) {
 		return model.User{}, err
 	}
 
-	req, err = http.NewRequest("POST", m.baseUrl+"/api/user/", bytes.NewBuffer(bodyStr))
+	req, err := http.NewRequest("POST", m.baseUrl+"/api/user/", bytes.NewBuffer(bodyStr))
 	if err != nil {
 		return model.User{}, err
 	}
-	req.Header.Add("Authorization", m.tokenType+" "+m.token)
 
-	resp, err = m.client.Do(req)
+	req.Header.Add("Authorization", m.tokenType+" "+m.token)
+	resp, err := m.client.Do(req)
 	if err != nil {
 		return model.User{}, err
 	}
+
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			log.Println(err)
+			return
 		}
 	}(resp.Body)
 
