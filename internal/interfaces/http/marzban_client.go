@@ -76,7 +76,7 @@ func (m *marzbanClient) AddUser(username string) (model.User, error) {
 			"vless": {},
 		},
 		Inbounds: map[string][]string{
-			"vless": {"TEAMDOCS", "VK"},
+			"vless": {"TEAMDOCS", "VK", "WHITELIST"},
 		},
 		Note:                 "",
 		OnHoldTimeout:        time.Now().Format(time.RFC3339),
