@@ -37,6 +37,6 @@ func UserActivityCount(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 	}
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-		fmt.Sprintf("Количетсво подключённых пользователей %d\n", len(users.Users)))
+		fmt.Sprintf("Количетсво подключённых пользователей %d\n", count))
 	_, _ = bot.Send(msg)
 }
