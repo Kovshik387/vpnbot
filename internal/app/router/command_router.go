@@ -75,6 +75,16 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 		admin.UserListHandler(update, bot, userUC, true)
 	}
 
+	baseHandlers["count"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		admin.UserActivityCount(update, bot, userUC)
+	}
+
 	baseHandlers["deleteuser"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		err := checkPermission(update, bot, config.AdminId)
 		if err != nil {
