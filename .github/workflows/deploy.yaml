@@ -34,12 +34,13 @@ jobs:
           set -euo pipefail
           [ -d /root/vpnbot/data ] && cp -r /root/vpnbot/data "/root/vpnbot/data_backup_$(date +%F_%H-%M-%S)" || true
 
-      - name: Sync repo into /root/vpnbot (keep data/)
+      - name: Sync repo into /root/vpnbot (keep data/ and .env)
         run: |
           set -euo pipefail
           rsync -a --delete \
             --exclude 'data' --exclude 'data_backup*' \
             --exclude '.git' --exclude 'bot' \
+            --exclude '.env' \
             ./ /root/vpnbot/
 
       - name: Build bot into /root/vpnbot
