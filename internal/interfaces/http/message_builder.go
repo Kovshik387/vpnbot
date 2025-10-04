@@ -57,8 +57,8 @@ func (*messageBuilder) SendUserInfo(user model.User) (string, bool, error) {
 			"<b>Status:</b> %s\n"+
 			"<b>OnlineAt:</b> %s\n"+
 			"<b>Usage:</b> %.1f GB\n"+
-			"<b>Sub URL QR+Key:</b> <a href=\"%s\">ссылка</a>\n"+
-			"<b>Link:</b> <tg-spoiler><code>%s</code></tg-spoiler>\n"+
+			"<b>Для телефона ссылка на подписку:</b> <a href=\"%s\">ссылка</a>\n"+
+			"<b>Для компьютера:</b> <tg-spoiler><code>%s</code></tg-spoiler>\n"+
 			"%s",
 		separator,
 		utils.HtmlEscape(user.Username),
