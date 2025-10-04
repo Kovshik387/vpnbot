@@ -21,6 +21,14 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
+      - name: Who am I / paths
+        run: |
+          set -euo pipefail
+          whoami
+          id
+          echo "systemctl path: $(command -v systemctl)"
+          /usr/bin/sudo -n -l || true
+
       - name: Backup SQLite (optional)
         run: |
           set -euo pipefail
@@ -40,19 +48,16 @@ jobs:
           go build -o /root/vpnbot/bot cmd/api/main.go
           chmod +x /root/vpnbot/bot
 
-      - name: Who am I / paths
+      - name: Restart service (no TTY, full path)
         run: |
           set -euo pipefail
-          whoami
-          id
-          echo "systemctl path: $(command -v systemctl)"
-          ls -l /etc/sudoers.d || true
-          sudo -n -l || true
-
-      - name: Restart service (no TTY)
-        run: |
-          set -euo pipefail
-          sudo -n systemctl daemon-reload
-          sudo -n systemctl restart vpnbot.service
+          /usr/bin/sudo -n /usr/bin/systemctl daemon-reload
+          /usr/bin/sudo -n /usr/bin/systemctl restart vpnbot.service
           sleep 2
-          sudo -n systemctl --no-pager -l status vpnbot.service
+          /usr/bin/sudo -n /usr/bin/systemctl --no-pager -l status vpnbot.service
+
+      - name: Dump service logs if failed
+        if: failure()
+        run: |
+          set -euo pipefail
+          /usr/bin/sudo -n /usr/bin/journalctl -u vpnbot.service -n 200 --no-pager || true
