@@ -49,13 +49,18 @@ jobs:
           go build -o /root/vpnbot/bot cmd/api/main.go
           chmod +x /root/vpnbot/bot
 
-      - name: Restart service (no TTY, full path)
+      - name: Ensure .env exists
+        run: |
+          set -euo pipefail
+          test -f /root/vpnbot/.env || { echo "❌ /root/vpnbot/.env not found"; exit 1; }
+
+      - name: Restart service (no TTY, exact commands)
         run: |
           set -euo pipefail
           /usr/bin/sudo -n /usr/bin/systemctl daemon-reload
           /usr/bin/sudo -n /usr/bin/systemctl restart vpnbot.service
           sleep 2
-          /usr/bin/sudo -n /usr/bin/systemctl --no-pager -l status vpnbot.service
+          /usr/bin/sudo -n /usr/bin/systemctl status vpnbot.service
 
       - name: Dump service logs if failed
         if: failure()
