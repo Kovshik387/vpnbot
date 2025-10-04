@@ -37,7 +37,8 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) {
 			"/activity - посмотреть активных пользователей\n" +
 			"/say - оповестить пользователей\n" +
 			"/count - количество активных пользователей\n" +
-			"/status - нагрузка сервера"
+			"/status - нагрузка сервера\n" +
+			"actions"
 	}
 
 	btnKey := tgbotapi.NewInlineKeyboardButtonData("🔑 Запросить ключ", "request_key")
