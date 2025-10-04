@@ -13,11 +13,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run tests
+        run: go test -v ./...
+
       - name: Who am I / paths
         run: |
           set -euo pipefail
           whoami
-          go version
+          id
           echo "systemctl path: $(command -v systemctl)"
           /usr/bin/sudo -n -l || true
 
@@ -38,7 +46,6 @@ jobs:
       - name: Build bot into /root/vpnbot
         run: |
           set -euo pipefail
-          # локальный Go уже установлен в /usr/local/go
           go build -o /root/vpnbot/bot cmd/api/main.go
           chmod +x /root/vpnbot/bot
 
