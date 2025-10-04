@@ -40,6 +40,15 @@ jobs:
           go build -o /root/vpnbot/bot cmd/api/main.go
           chmod +x /root/vpnbot/bot
 
+      - name: Who am I / paths
+        run: |
+          set -euo pipefail
+          whoami
+          id
+          echo "systemctl path: $(command -v systemctl)"
+          ls -l /etc/sudoers.d || true
+          sudo -n -l || true
+
       - name: Restart service (no TTY)
         run: |
           set -euo pipefail
