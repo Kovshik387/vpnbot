@@ -1,0 +1,61 @@
+﻿name: Deploy (Self-hosted)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run tests (fast fail)
+        run: go test -v ./...
+
+      - name: Build production binary
+        run: |
+          set -euo pipefail
+          go build -o bot cmd/api/main.go
+          ./bot -h >/dev/null 2>&1 || true
+
+      - name: Put binary in place (~/vpnbot) and restart service
+        run: |
+          set -euo pipefail
+          mkdir -p ~/vpnbot
+
+          if [ -f ~/vpnbot/bot ]; then
+            cp -f ~/vpnbot/bot ~/vpnbot/bot.prev
+          fi
+
+          mv -f bot ~/vpnbot/bot
+          chmod +x ~/vpnbot/bot
+
+          sudo systemctl daemon-reload
+          sudo systemctl restart vpnbot.service
+
+      - name: Health check & rollback if needed
+        run: |
+          set -euo pipefail
+          sleep 2
+
+          if ! sudo systemctl is-active --quiet vpnbot.service; then
+            echo "Service failed to start. Rolling back..."
+            if [ -f ~/vpnbot/bot.prev ]; then
+              mv -f ~/vpnbot/bot.prev ~/vpnbot/bot
+              sudo systemctl restart vpnbot.service || true
+            fi
+            sudo systemctl --no-pager -l status vpnbot.service || true
+            exit 1
+          fi
+
+          sudo systemctl --no-pager -l status vpnbot.service
