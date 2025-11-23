@@ -77,6 +77,26 @@ select 1
 	return true, nil
 }
 
+func (r *UserRepository) GetUsernameByUserID(userID int64) (string, error) {
+	row := r.db.QueryRow(`
+        select username
+          from users
+         where user_id = ?;
+    `, userID)
+
+	var username string
+	err := row.Scan(&username)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	return username, nil
+}
+
 func (r *UserRepository) GetBlocked() ([]model.TgUserModel, error) {
 	rows, err := r.db.Query(`
 select user_id, username, is_block

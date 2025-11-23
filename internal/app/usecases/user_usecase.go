@@ -4,17 +4,66 @@ import (
 	"VpnBot/internal/domain/model"
 	"VpnBot/internal/domain/ports/service"
 	"VpnBot/internal/domain/repository"
+	"fmt"
+	"strings"
 )
 
 type UserUsecase struct {
 	marzbanClient  service.MarzbanService
-	userRepository *repository.UserRepository
 	yandexClient   service.YandexService
+	userRepository *repository.UserRepository
+	pollRepository *repository.PollRepository
 }
 
-func NewUserUsecase(marzbanClient service.MarzbanService, userRepository *repository.UserRepository,
-	yandexService service.YandexService) *UserUsecase {
-	return &UserUsecase{marzbanClient: marzbanClient, userRepository: userRepository, yandexClient: yandexService}
+func NewUserUsecase(marzbanClient service.MarzbanService, yandexService service.YandexService,
+	userRepository *repository.UserRepository, pollRepository *repository.PollRepository) *UserUsecase {
+	return &UserUsecase{marzbanClient: marzbanClient, userRepository: userRepository, pollRepository: pollRepository,
+		yandexClient: yandexService}
+}
+
+func (u *UserUsecase) SavePollResults(poll *model.PollResult) error {
+	return u.pollRepository.UpsertPollResults(
+		poll.PollID,
+		poll.Question,
+		poll.IsAnonymous,
+		poll.AllowsMultiple,
+		poll.Options,
+	)
+}
+
+func (u *UserUsecase) PollResult(pollID string) (string, error) {
+	res, err := u.pollRepository.GetPollResults(pollID)
+	if err != nil {
+		return "", err
+	}
+	if res == nil {
+		return "", nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Результаты опроса:\n")
+	sb.WriteString(fmt.Sprintf("ID: `%s`\n", res.PollID))
+	sb.WriteString(fmt.Sprintf("Вопрос: %s\n\n", res.Question))
+
+	total := 0
+	for _, o := range res.Options {
+		total += o.Votes
+	}
+
+	for _, o := range res.Options {
+		percent := 0
+		if total > 0 {
+			percent = int(float64(o.Votes) / float64(total) * 100)
+		}
+		sb.WriteString(fmt.Sprintf("%d) %s — %d голосов (%d%%)\n",
+			o.OptionIndex+1, o.Text, o.Votes, percent))
+	}
+
+	return sb.String(), nil
+}
+
+func (u *UserUsecase) GetAllPolls() ([]model.PollResult, error) {
+	return u.pollRepository.ListPolls()
 }
 
 func (u *UserUsecase) ListUsers() (model.UsersResponse, error) {
@@ -47,6 +96,10 @@ func (u *UserUsecase) CheckBlock(uid int64) (bool, error) {
 
 func (u *UserUsecase) UserExist(uid int64) (bool, error) {
 	return u.userRepository.UserExist(uid)
+}
+
+func (u *UserUsecase) GetUserByUserId(uid int64) (string, error) {
+	return u.userRepository.GetUsernameByUserID(uid)
 }
 
 func (u *UserUsecase) ListBlocked() ([]model.TgUserModel, error) {

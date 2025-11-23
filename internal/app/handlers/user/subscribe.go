@@ -11,12 +11,25 @@ import (
 func GetSubscribeHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase) {
 	from := update.CallbackQuery.From
 	uid := from.ID
-	username := from.UserName
-	if username == "" {
-		username = fmt.Sprintf("id_%d", uid)
+	currentUsername := from.UserName
+	if currentUsername == "" {
+		currentUsername = fmt.Sprintf("id_%d", uid)
 	}
 
-	user, err := userUC.SearchUser(username)
+	storedUsername, err := userUC.GetUserByUserId(uid)
+	if err != nil {
+		log.Println("failed to get stored username by user id:", err)
+		msg := tgbotapi.NewMessage(uid, "Ошибка при получении подписки")
+		_, _ = bot.Send(msg)
+		return
+	}
+
+	effectiveUsername := storedUsername
+	if effectiveUsername == "" {
+		effectiveUsername = currentUsername
+	}
+
+	user, err := userUC.SearchUser(effectiveUsername)
 	if err != nil {
 		msg := tgbotapi.NewMessage(uid, "Ошибка при получения подписки")
 		_, _ = bot.Send(msg)

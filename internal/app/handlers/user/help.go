@@ -38,6 +38,8 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) {
 			"/say - оповестить пользователей\n" +
 			"/count - количество активных пользователей\n" +
 			"/status - нагрузка сервера\n" +
+			"/poll_result - результат опроса\n" +
+			"/poll_list - список опросов\n" +
 			"success anal deploy"
 	}
 

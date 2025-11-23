@@ -2,6 +2,7 @@ package main
 
 import (
 	"VpnBot/config"
+	"VpnBot/internal/app/handlers/admin"
 	"VpnBot/internal/app/router"
 	"VpnBot/internal/app/usecases"
 	"VpnBot/internal/domain/repository"
@@ -60,7 +61,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	userUC := usecases.NewUserUsecase(marzbanClient, ur, yandexClient)
+	pol := repository.NewPollRepository(db)
+	if err := pol.Init(); err != nil {
+		log.Fatal(err)
+	}
+
+	userUC := usecases.NewUserUsecase(marzbanClient, yandexClient, ur, pol)
 	cooldownUC := usecases.NewCooldownUsecase(cr)
 	reminderUC := usecases.NewReminderUsecase(ur)
 
@@ -74,6 +80,12 @@ func main() {
 	log.Print("Бот включился")
 
 	for update := range updates {
+
+		if update.Poll != nil || (update.Message != nil && update.Message.Poll != nil) {
+			log.Print("Действие опроса")
+			admin.HandlePollUpdate(update, userUC)
+			continue
+		}
 
 		switch {
 		case update.Message != nil && update.Message.IsCommand():

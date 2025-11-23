@@ -116,12 +116,28 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 			return
 		}
 
-		args, err := checkArgs(update, bot, "Использование: /say <text>")
+		admin.SayCommandHandler(update, bot, userUC)
+	}
+	baseHandlers["poll_result"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		if err := checkPermission(update, bot, config.AdminId); err != nil {
+			log.Println(err)
+			return
+		}
+
+		pollID, err := checkArgs(update, bot, "Использование: /poll_result <poll_id>")
 		if err != nil {
 			return
 		}
 
-		admin.SayHandler(update, bot, userUC, args)
+		admin.PollResultHandler(update, bot, userUC, pollID)
+	}
+	baseHandlers["poll_list"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		if err := checkPermission(update, bot, config.AdminId); err != nil {
+			log.Println(err)
+			return
+		}
+
+		admin.PollListHandler(update, bot, userUC)
 	}
 
 	baseHandlers["skebob"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
