@@ -6,6 +6,7 @@ import (
 	"VpnBot/internal/domain/repository"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type UserUsecase struct {
@@ -90,6 +91,18 @@ func (u *UserUsecase) Block(uid int64, block bool) error {
 	return u.userRepository.Block(uid, block)
 }
 
+func (u *UserUsecase) UpdatePrice(username string, price float64) error {
+	return u.userRepository.UpdatePrice(username, price)
+}
+
+func (u *UserUsecase) UpdateTypePayment(username string, isFree bool) error {
+	return u.userRepository.UpdateTypePayment(username, isFree)
+}
+
+func (u *UserUsecase) UpdatePaymentDate(username string, date time.Time) error {
+	return u.userRepository.UpdatePaymentDate(username, date)
+}
+
 func (u *UserUsecase) CheckBlock(uid int64) (bool, error) {
 	return u.userRepository.CheckBlock(uid)
 }
@@ -108,6 +121,10 @@ func (u *UserUsecase) ListBlocked() ([]model.TgUserModel, error) {
 
 func (u *UserUsecase) ListActive() ([]model.TgUserModel, error) {
 	return u.userRepository.GetActive()
+}
+
+func (u *UserUsecase) ListPayment() ([]model.TgUserModel, error) {
+	return u.userRepository.GetPayment()
 }
 
 func (u *UserUsecase) Skebob(url string) (string, error) {

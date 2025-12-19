@@ -170,6 +170,56 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 		admin.UserBlockedHandler(update, bot, userUC)
 	}
 
+	baseHandlers["setprice"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		args, err := checkArgs(update, bot,
+			"Использование: /setprice username цена\n"+
+				"Пример: /setprice vasya 500.00")
+		if err != nil {
+			return
+		}
+
+		admin.SetPriceHandler(update, bot, userUC, args)
+	}
+
+	baseHandlers["setdate"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		args, err := checkArgs(update, bot,
+			"Использование: /setdate username YYYY-MM-DD\n"+
+				"Пример: /setdate vasya 2024-12-25")
+		if err != nil {
+			return
+		}
+
+		admin.SetPaymentDateHandler(update, bot, userUC, args)
+	}
+
+	baseHandlers["setfree"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		args, err := checkArgs(update, bot,
+			"Использование: /setfree username true/false\n")
+		if err != nil {
+			return
+		}
+
+		admin.UpdateTypePaymentHandler(update, bot, userUC, args)
+	}
+
 	return baseHandlers
 }
 

@@ -16,5 +16,5 @@ func NewReminderUsecase(rep *repository.UserRepository) *ReminderUsecase {
 }
 
 func (uc *ReminderUsecase) InitReminder() ([]model.TgUserModel, error) {
-	return uc.userRepository.GetActive()
+	return uc.userRepository.GetPayment()
 }

@@ -57,7 +57,7 @@ func main() {
 	}
 
 	ur := repository.NewUserRepository(db)
-	if err := ur.Init(); err != nil {
+	if err := ur.EnsureSchema(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -70,7 +70,7 @@ func main() {
 	cooldownUC := usecases.NewCooldownUsecase(cr)
 	reminderUC := usecases.NewReminderUsecase(ur)
 
-	reminderJob := jobs.NewReminderJob(reminderUC, bot)
+	reminderJob := jobs.NewReminderJob(reminderUC, bot, cfg)
 
 	reminderJob.Start()
 
