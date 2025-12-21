@@ -4,6 +4,7 @@ import (
 	"VpnBot/config"
 	"VpnBot/internal/app/handlers/admin"
 	"VpnBot/internal/app/router"
+	"VpnBot/internal/app/ui"
 	"VpnBot/internal/app/usecases"
 	"VpnBot/internal/domain/repository"
 	interfaces "VpnBot/internal/interfaces/http"
@@ -88,7 +89,22 @@ func main() {
 		}
 
 		switch {
-		case update.Message != nil && update.Message.IsCommand():
+
+		case update.Message != nil && update.Message.Text != "" && !update.Message.IsCommand():
+			if checkBlock(userUC, update.Message.Chat.ID) {
+				blockUser(update, bot, true)
+				continue
+			}
+
+			switch update.Message.Text {
+			case ui.BtnCheckSubscription:
+				if handler, ok := commandRouter["subscribe"]; ok {
+					handler(update, bot)
+				}
+			}
+			continue
+
+		case update.Message != nil && update.Message.Text != "" && update.Message.IsCommand():
 			if checkBlock(userUC, update.Message.Chat.ID) {
 				blockUser(update, bot, true)
 				continue

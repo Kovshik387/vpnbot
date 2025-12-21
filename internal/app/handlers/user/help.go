@@ -60,6 +60,7 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) {
 	)
 
 	msg := tgbotapi.NewMessage(chatId, text)
+	msg.ParseMode = tgbotapi.ModeMarkdown
 	msg.ReplyMarkup = keyboard
 
 	_, err := bot.Send(msg)

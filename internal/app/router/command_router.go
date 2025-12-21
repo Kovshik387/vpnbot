@@ -220,6 +220,10 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 		admin.UpdateTypePaymentHandler(update, bot, userUC, args)
 	}
 
+	baseHandlers["subscribe"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		user.GetSubscribeHandler(update, bot, userUC)
+	}
+
 	return baseHandlers
 }
 
