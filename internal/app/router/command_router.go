@@ -224,6 +224,36 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 		user.GetSubscribeHandler(update, bot, userUC)
 	}
 
+	baseHandlers["override"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		argsStr, err := checkArgs(update, bot,
+			"Использование: /override <старая_дата> <новая_дата>\n"+
+				"Формат даты: YYYY-MM-DD\n"+
+				"Пример: /override 2024-01-15 2024-01-20")
+		if err != nil {
+			return
+		}
+
+		args := strings.Fields(argsStr)
+
+		if len(args) < 2 {
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID,
+				"❌ Необходимо указать две даты\n\n"+
+					"Использование: /override <старая_дата> <новая_дата>\n"+
+					"Формат даты: YYYY-MM-DD\n"+
+					"Пример: /override 2024-01-15 2024-01-20")
+			_, _ = bot.Send(msg)
+			return
+		}
+
+		admin.OverrideDateHandler(update, bot, userUC, args[0], args[1])
+	}
+
 	return baseHandlers
 }
 

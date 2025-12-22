@@ -127,6 +127,10 @@ func (u *UserUsecase) ListPayment() ([]model.TgUserModel, error) {
 	return u.userRepository.GetPayment()
 }
 
+func (u *UserUsecase) OverrideDate(date time.Time, dateOverride time.Time) error {
+	return u.userRepository.OverrideDate(date, dateOverride)
+}
+
 func (u *UserUsecase) Skebob(url string) (string, error) {
 	return u.yandexClient.GetYandexDirectLink(url)
 }
