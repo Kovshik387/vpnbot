@@ -26,7 +26,7 @@ func (job *ReminderJob) Start() {
 	cr := cron.New()
 
 	//_, err := cr.AddFunc("*/1 * * * *", func()
-	_, err := cr.AddFunc("0 0 18 * *", func() {
+	_, err := cr.AddFunc("0 18 * * *", func() {
 		u, err := job.uc.InitReminder()
 		if err != nil {
 			log.Println("Ошибка при отправке напоминаний:", err)
