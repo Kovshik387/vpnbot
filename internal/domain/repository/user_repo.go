@@ -310,7 +310,13 @@ select user_id, username, is_block, price, is_free, payment_date from users
 }
 
 func (r *UserRepository) OverrideDate(date time.Time, dateOverride time.Time) error {
-	_, err := r.db.Exec(`update users set payment_date = ? where payment_date = ?`, date, dateOverride)
+	oldDateStr := date.Format("2006-01-02")
+
+	_, err := r.db.Exec(
+		`
+update users 
+   set payment_date = ?
+ where date(payment_date) = ?`, dateOverride, oldDateStr)
 
 	return err
 }
