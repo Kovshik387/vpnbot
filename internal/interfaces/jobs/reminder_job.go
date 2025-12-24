@@ -25,8 +25,9 @@ func NewReminderJob(uc *usecases.ReminderUsecase, tg *tgbotapi.BotAPI, cfg *conf
 func (job *ReminderJob) Start() {
 	cr := cron.New()
 
+	log.Println("Pepe")
 	//_, err := cr.AddFunc("*/1 * * * *", func()
-	_, err := cr.AddFunc("0 18 * * *", func() {
+	_, err := cr.AddFunc("* 20 * * *", func() {
 		u, err := job.uc.InitReminder()
 		if err != nil {
 			log.Println("Ошибка при отправке напоминаний:", err)
