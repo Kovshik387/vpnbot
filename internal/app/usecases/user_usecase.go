@@ -134,3 +134,7 @@ func (u *UserUsecase) OverrideDate(date time.Time, dateOverride time.Time) error
 func (u *UserUsecase) Skebob(url string) (string, error) {
 	return u.yandexClient.GetYandexDirectLink(url)
 }
+
+func (u *UserUsecase) AddCompensationDays(daysCount int) error {
+	return u.userRepository.AddCompensationDays(daysCount)
+}

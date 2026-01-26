@@ -320,3 +320,13 @@ update users
 
 	return err
 }
+
+func (r *UserRepository) AddCompensationDays(daysCount int) error {
+	_, err := r.db.Exec(`
+update users
+   set payment_date = DATE_ADD(payment_date, INTERVAL ? DAY)
+ where is_free = false
+`, daysCount)
+
+	return err
+}
