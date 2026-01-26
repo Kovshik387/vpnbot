@@ -324,8 +324,8 @@ update users
 func (r *UserRepository) AddCompensationDays(daysCount int) error {
 	_, err := r.db.Exec(`
 update users
-   set payment_date = DATE_ADD(payment_date, INTERVAL ? DAY)
- where is_free = false
+   set payment_date = datetime(COALESCE(payment_date, '2024-11-21 00:00:00'), '+' || ? || ' days')
+ where is_free = 0
 `, daysCount)
 
 	return err

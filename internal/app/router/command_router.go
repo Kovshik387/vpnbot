@@ -232,7 +232,7 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 			return
 		}
 
-		arg, err := checkArgs(update, bot, "Использование: /adduser <username>")
+		arg, err := checkArgs(update, bot, "Использование: /compensation <days>")
 		if err != nil {
 			return
 		}
