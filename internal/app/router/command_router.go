@@ -6,10 +6,11 @@ import (
 	"VpnBot/internal/app/handlers/user"
 	"VpnBot/internal/app/usecases"
 	"errors"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"strconv"
 	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type CommandHandler func(update tgbotapi.Update, bot *tgbotapi.BotAPI)
@@ -222,6 +223,27 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 
 	baseHandlers["subscribe"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		user.GetSubscribeHandler(update, bot, userUC)
+	}
+
+	baseHandlers["compensation"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		arg, err := checkArgs(update, bot, "Использование: /compensation <days>")
+		if err != nil {
+			return
+		}
+
+		count, err := strconv.Atoi(arg)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		admin.CompensationHandler(update, bot, userUC, count)
 	}
 
 	baseHandlers["override"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {

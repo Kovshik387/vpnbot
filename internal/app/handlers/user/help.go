@@ -47,6 +47,7 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) {
 			"/setprice <user> <сумма> - цена подписки\n" +
 			"/setdate <user> <YYYY-MM-DD> - дата оплаты\n" +
 			"/setfree <user> <true/false> - бесплатный статус\n" +
+			"/compensation <days> - компенсация\n" +
 			"🔧 *Технические:*\n" +
 			"success anal deploy"
 	}
