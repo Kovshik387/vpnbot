@@ -108,7 +108,7 @@ func (r *UserRepository) Insert(user string, uid int64) error {
 	_, err := r.db.Exec(`
 		insert into users (user_id, username, is_block, price, is_free, payment_date) 
 		values (?, ?, ?, ?, ?, ?)`,
-		uid, user, false, 0.0, false, time.Now())
+		uid, user, false, 150.0, false, time.Now())
 	return err
 }
 
