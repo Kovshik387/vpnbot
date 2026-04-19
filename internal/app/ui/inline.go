@@ -61,9 +61,9 @@ func PaymentReminderKeyboard() tgbotapi.InlineKeyboardMarkup {
 // PaymentRevokedKeyboard — только оплата и возврат к панели (без «Объявления»).
 func PaymentRevokedKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("💳 Оплата", "payment_flow"),
-		),
+		//tgbotapi.NewInlineKeyboardRow(
+		//	tgbotapi.NewInlineKeyboardButtonData("💳 Оплата", "payment_flow"),
+		//),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("🏠 Панель", "panel_home"),
 		),
