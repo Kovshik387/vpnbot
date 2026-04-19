@@ -1,13 +1,17 @@
 package user
 
 import (
-	"VpnBot/internal/app/usecases"
-	"VpnBot/internal/utils"
 	"fmt"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	"VpnBot/internal/app/ui"
+	"VpnBot/internal/app/usecases"
+	"VpnBot/internal/domain/repository"
+	"VpnBot/internal/utils"
 )
 
-func GetKeyHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, cdUC *usecases.CooldownUsecase, adminId int64) {
+func GetKeyHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, cdUC *usecases.CooldownUsecase, adminId int64, pr *repository.PanelRepository, userUC *usecases.UserUsecase) {
 	from := update.CallbackQuery.From
 	uid := from.ID
 	username := from.UserName
@@ -16,19 +20,26 @@ func GetKeyHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, cdUC *usecases.
 	}
 
 	if onCooldown, remaining, _ := cdUC.IsOnCooldown(uid); onCooldown {
-		msg := tgbotapi.NewMessage(uid,
-			fmt.Sprintf("⏳ Вы уже отправляли заявку. Попробуйте снова через %d минут.",
-				int(remaining.Minutes())))
-		_, _ = bot.Send(msg)
-		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Бро ты в муте"))
+		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Лимит заявок"))
+		t := fmt.Sprintf("⏳ Заявку уже отправляли. Следующая попытка через <b>%d мин.</b>",
+			int(remaining.Minutes()))
+		kb := ui.HelpActionsKeyboard()
+		EditPanelFromUpdate(bot, pr, update, uid, t, &kb, true)
+		return
+	}
+	if exists, err := userUC.UserExist(uid); err == nil && exists {
+		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Уже есть доступ"))
+		t := "У вас уже есть доступ в базе. Новый ключ запрашивать не нужно."
+		kb := MainMenuKeyboard(userUC, uid, false)
+		EditPanelFromUpdate(bot, pr, update, uid, t, &kb, true)
 		return
 	}
 
 	text := fmt.Sprintf(
-		"Запрос на ключ:\n"+
+		"<b>Заявка на ключ</b>\n"+
 			"Пользователь: @%s\n"+
-			"ID: `%d`",
-		utils.EscapeMarkdownV2(username), uid,
+			"Telegram ID: <code>%d</code>",
+		utils.HtmlEscape(username), uid,
 	)
 	approveBtn := tgbotapi.NewInlineKeyboardButtonData("✅ Одобрить", fmt.Sprintf("approve:%d %s",
 		uid, username))
@@ -42,18 +53,12 @@ func GetKeyHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, cdUC *usecases.
 	)
 
 	adminMsg := tgbotapi.NewMessage(adminId, text)
-	adminMsg.ParseMode = "MarkdownV2"
+	adminMsg.ParseMode = tgbotapi.ModeHTML
 	adminMsg.ReplyMarkup = keyboard
 	_, _ = bot.Send(adminMsg)
 
-	_, _ = bot.Request(tgbotapi.NewDeleteMessage(
-		update.CallbackQuery.Message.Chat.ID,
-		update.CallbackQuery.Message.MessageID,
-	))
-
-	_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Заявка отправлена админу"))
-	_, _ = bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
-		"⏳ Ваша заявка отправлена админу, ожидайте решения"))
-
-	HelpHandler(update, bot, adminId)
+	_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Отправлено"))
+	userText := "✅ Заявка у администратора. Ответ придёт в этот чат."
+	kb := MainMenuKeyboard(userUC, uid, false)
+	EditPanelFromUpdate(bot, pr, update, uid, userText, &kb, true)
 }

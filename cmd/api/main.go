@@ -3,6 +3,7 @@ package main
 import (
 	"VpnBot/config"
 	"VpnBot/internal/app/handlers/admin"
+	"VpnBot/internal/app/handlers/user"
 	"VpnBot/internal/app/router"
 	"VpnBot/internal/app/ui"
 	"VpnBot/internal/app/usecases"
@@ -67,16 +68,29 @@ func main() {
 		log.Fatal(err)
 	}
 
-	userUC := usecases.NewUserUsecase(marzbanClient, yandexClient, ur, pol)
-	cooldownUC := usecases.NewCooldownUsecase(cr)
-	reminderUC := usecases.NewReminderUsecase(ur)
+	panelRepo := repository.NewPanelRepository(db)
+	if err := panelRepo.Init(); err != nil {
+		log.Fatalf("ui_panel init: %v", err)
+	}
+	sayLogRepo := repository.NewSayLogRepository(db)
+	if err := sayLogRepo.Init(); err != nil {
+		log.Fatalf("say_logs init: %v", err)
+	}
+	paymentReportRepo := repository.NewPaymentReportRepository(db)
+	if err := paymentReportRepo.Init(); err != nil {
+		log.Fatalf("payment_confirms init: %v", err)
+	}
 
-	reminderJob := jobs.NewReminderJob(reminderUC, bot, cfg)
+	userUC := usecases.NewUserUsecase(marzbanClient, yandexClient, ur, pol, paymentReportRepo)
+	cooldownUC := usecases.NewCooldownUsecase(cr)
+
+	reminderJob := jobs.NewReminderJob(userUC, bot, cfg, panelRepo)
 
 	reminderJob.Start()
 
-	commandRouter := router.NewCommandRouter(userUC, cfg)
-	callbackRouter := router.NewCallbackRouter(userUC, cooldownUC, cfg)
+	uiR := &router.UIRepos{Panel: panelRepo, SayLog: sayLogRepo}
+	commandRouter := router.NewCommandRouter(userUC, cfg, uiR)
+	callbackRouter := router.NewCallbackRouter(userUC, cooldownUC, cfg, uiR)
 
 	log.Print("Бот включился")
 
@@ -90,9 +104,23 @@ func main() {
 
 		switch {
 
+		case update.Message != nil && len(update.Message.Photo) > 0:
+			if checkBlock(userUC, update.Message.Chat.ID) {
+				blockUser(update, bot, true)
+				continue
+			}
+			if user.HandlePaymentPhoto(update, bot, userUC, cfg.AdminId, panelRepo) {
+				continue
+			}
+			continue
+
 		case update.Message != nil && update.Message.Text != "" && !update.Message.IsCommand():
 			if checkBlock(userUC, update.Message.Chat.ID) {
 				blockUser(update, bot, true)
+				continue
+			}
+			if paymentRevokedBlocksPlainText(userUC, update.Message) {
+				sendPaymentRevokedNotice(bot, panelRepo, update.Message.From.ID)
 				continue
 			}
 
@@ -101,12 +129,20 @@ func main() {
 				if handler, ok := commandRouter["subscribe"]; ok {
 					handler(update, bot)
 				}
+			case "./start":
+				if handler, ok := commandRouter["start"]; ok {
+					handler(update, bot)
+				}
 			}
 			continue
 
 		case update.Message != nil && update.Message.Text != "" && update.Message.IsCommand():
 			if checkBlock(userUC, update.Message.Chat.ID) {
 				blockUser(update, bot, true)
+				continue
+			}
+			if paymentRevokedBlocksCommand(userUC, update.Message) {
+				sendPaymentRevokedNotice(bot, panelRepo, update.Message.From.ID)
 				continue
 			}
 			if handler, ok := commandRouter[update.Message.Command()]; ok {
@@ -119,6 +155,11 @@ func main() {
 				continue
 			}
 			data := update.CallbackQuery.Data
+			if paymentRevokedBlocksCallback(userUC, update.CallbackQuery.From.ID, data) {
+				_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Нужна оплата"))
+				sendPaymentRevokedNotice(bot, panelRepo, update.CallbackQuery.From.ID)
+				continue
+			}
 
 			if handler, ok := callbackRouter[data]; ok {
 				handler(update, bot)
@@ -135,7 +176,7 @@ func main() {
 			}
 
 			if !found {
-				_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Неизвестная кнопка"))
+				_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Действие не распознано"))
 			}
 		}
 	}
@@ -153,20 +194,62 @@ func checkBlock(uc *usecases.UserUsecase, id int64) bool {
 	return blocked
 }
 
+func paymentRevokedBlocksPlainText(uc *usecases.UserUsecase, m *tgbotapi.Message) bool {
+	if m == nil {
+		return false
+	}
+	revoked, err := uc.CheckPaymentRevoked(m.From.ID)
+	if err != nil || !revoked {
+		return false
+	}
+	if m.Text == "./start" {
+		return false
+	}
+	return true
+}
+
+func paymentRevokedBlocksCommand(uc *usecases.UserUsecase, m *tgbotapi.Message) bool {
+	if m == nil {
+		return false
+	}
+	revoked, err := uc.CheckPaymentRevoked(m.From.ID)
+	if err != nil || !revoked {
+		return false
+	}
+	return m.Command() != "start"
+}
+
+func paymentRevokedBlocksCallback(uc *usecases.UserUsecase, fromUserID int64, data string) bool {
+	revoked, err := uc.CheckPaymentRevoked(fromUserID)
+	if err != nil || !revoked {
+		return false
+	}
+	return !user.CallbackExemptWhenPaymentRevoked(data)
+}
+
+func sendPaymentRevokedNotice(bot *tgbotapi.BotAPI, panelRepo *repository.PanelRepository, userID int64) {
+	text := "⏸️ <b>Доступ приостановлен</b> из-за просроченной оплаты.\n\n" +
+		"Нажмите «Оплата» и отправьте скриншот перевода — после проверки срок продлят на месяц."
+	kb := ui.PaymentRevokedKeyboard()
+	user.EditPanelHTMLForUser(bot, panelRepo, userID, text, &kb, true)
+}
+
 func blockUser(update tgbotapi.Update, bot *tgbotapi.BotAPI, isCommand bool) {
 	var msg tgbotapi.MessageConfig
 	if isCommand {
 		msg = tgbotapi.NewMessage(
 			update.Message.Chat.ID,
-			"🚫 Доступ заблокирован.\nЕсли у вас есть вопросы — обратитесь к администратору: @KovshikGo",
+			"🚫 <b>Доступ ограничен</b>\n\n"+
+				"По вопросам разблокировки напишите администратору: @KovshikGo",
 		)
 	} else {
 		msg = tgbotapi.NewMessage(
 			update.CallbackQuery.Message.Chat.ID,
-			"🚫 Доступ заблокирован.\nЕсли у вас есть вопросы — обратитесь к администратору: @KovshikGo",
+			"🚫 <b>Доступ ограничен</b>\n\n"+
+				"По вопросам разблокировки напишите администратору: @KovshikGo",
 		)
 	}
 
-	msg.ParseMode = "Markdown"
+	msg.ParseMode = tgbotapi.ModeHTML
 	_, _ = bot.Send(msg)
 }

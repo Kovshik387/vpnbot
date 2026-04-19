@@ -2,55 +2,93 @@ package jobs
 
 import (
 	"VpnBot/config"
+	"VpnBot/internal/app/handlers/user"
+	"VpnBot/internal/app/ui"
 	"VpnBot/internal/app/usecases"
 	"VpnBot/internal/domain/model"
+	"VpnBot/internal/domain/repository"
+	"VpnBot/internal/utils"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/robfig/cron/v3"
 	"log"
 	"strings"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/robfig/cron/v3"
 )
 
 type ReminderJob struct {
-	uc  *usecases.ReminderUsecase
-	tg  *tgbotapi.BotAPI
-	cfg *config.Config
+	userUC *usecases.UserUsecase
+	tg     *tgbotapi.BotAPI
+	cfg    *config.Config
+	panel  *repository.PanelRepository
 }
 
-func NewReminderJob(uc *usecases.ReminderUsecase, tg *tgbotapi.BotAPI, cfg *config.Config) *ReminderJob {
-	return &ReminderJob{uc: uc, tg: tg, cfg: cfg}
+func NewReminderJob(userUC *usecases.UserUsecase, tg *tgbotapi.BotAPI, cfg *config.Config, panel *repository.PanelRepository) *ReminderJob {
+	return &ReminderJob{userUC: userUC, tg: tg, cfg: cfg, panel: panel}
 }
 
 func (job *ReminderJob) Start() {
 	cr := cron.New()
 
-	log.Println("Pepe")
-	//_, err := cr.AddFunc("*/1 * * * *", func()
+	//_, err := cr.AddFunc("*/1 * * * *", func() --debug
 	_, err := cr.AddFunc("20 18 * * *", func() {
-		u, err := job.uc.InitReminder()
+		dueToday, outs, err := job.userUC.ProcessBillingReminders(time.Now())
 		if err != nil {
 			log.Println("Ошибка при отправке напоминаний:", err)
 		}
 
-		job.sendAdminReport(u)
+		job.sendAdminReport(dueToday)
 
-		for _, user := range u {
+		for _, out := range outs {
+			u := out.User
+			var text string
+			switch out.Kind {
+			case usecases.BillingRemind2d:
+				text = fmt.Sprintf(
+					"👋 Здравствуйте, <b>%s</b>\n\n"+
+						"Напоминание: оплатите VPN <b>через 2 дня</b> (до %s), чтобы доступ не прерывался.\n\n"+
+						"💳 Сумма: <b>%.2f</b>",
+					utils.HtmlEscape(u.Username),
+					formatDueDate(u.PaymentDate),
+					u.Price,
+				)
+			case usecases.BillingRemind1d:
+				text = fmt.Sprintf(
+					"👋 Здравствуйте, <b>%s</b>\n\n"+
+						"Напоминание: оплатите VPN <b>завтра</b> (до %s).\n\n"+
+						"💳 Сумма: <b>%.2f</b>",
+					utils.HtmlEscape(u.Username),
+					formatDueDate(u.PaymentDate),
+					u.Price,
+				)
+			case usecases.BillingRemindDue:
+				text = fmt.Sprintf(
+					"👋 Здравствуйте, <b>%s</b>\n\n"+
+						"Сегодня — срок оплаты VPN (до %s). После полуночи доступ будет приостановлен до подтверждения оплаты.\n\n"+
+						"💳 Сумма: <b>%.2f</b>",
+					utils.HtmlEscape(u.Username),
+					formatDueDate(u.PaymentDate),
+					u.Price,
+				)
+			case usecases.BillingNewlyRevoked:
+				text = fmt.Sprintf(
+					"👋 Здравствуйте, <b>%s</b>\n\n"+
+						"Срок оплаты истёк. Доступ к разделам бота приостановлен.\n"+
+						"Нажмите «Оплата», пришлите скриншот перевода — после проверки администратором срок продлится на месяц.",
+					utils.HtmlEscape(u.Username),
+				)
+			default:
+				continue
+			}
 
-			msg := tgbotapi.NewMessage(
-				user.Uid,
-				fmt.Sprintf(
-					"👋 Привет, %s!\n\n"+
-						"Пора пополнить сервер, чтобы он продолжал работать 💳.\n\n"+
-						"*Сумма: %.2f*",
-					user.Username,
-					user.Price,
-				),
-			)
-
-			msg.ParseMode = tgbotapi.ModeMarkdown
-
-			_, _ = job.tg.Send(msg)
+			var kb tgbotapi.InlineKeyboardMarkup
+			if out.Kind == usecases.BillingNewlyRevoked {
+				kb = ui.PaymentRevokedKeyboard()
+			} else {
+				kb = ui.PaymentReminderKeyboard()
+			}
+			user.EditPanelHTMLForUser(job.tg, job.panel, u.Uid, text, &kb, true)
 		}
 
 	})
@@ -65,8 +103,8 @@ func (job *ReminderJob) Start() {
 func (job *ReminderJob) sendAdminReport(users []model.TgUserModel) {
 	if len(users) == 0 {
 		msg := tgbotapi.NewMessage(job.cfg.AdminId,
-			"✅ *Сегодня нет пользователей с истекающей подпиской*")
-		msg.ParseMode = "Markdown"
+			"✅ Сегодня нет пользователей с напоминанием об оплате.")
+		msg.ParseMode = tgbotapi.ModeHTML
 		_, err := job.tg.Send(msg)
 		if err != nil {
 			log.Printf("❌ Ошибка отправки админу: %v", err)
@@ -75,34 +113,41 @@ func (job *ReminderJob) sendAdminReport(users []model.TgUserModel) {
 	}
 
 	var report strings.Builder
-	report.WriteString("📅 *Список пользователей на оплату сегодня:*\n\n")
+	report.WriteString("<b>📅 Оплаты на сегодня</b>\n\n")
 
 	totalAmount := 0.0
 	paidUsers := 0
 
-	for i, user := range users {
-		report.WriteString(fmt.Sprintf("%d. 👤 *%s*\n", i+1, user.Username))
-		report.WriteString(fmt.Sprintf("   📱 ID: `%d`\n", user.Uid))
-		report.WriteString(fmt.Sprintf("   💰 Сумма: *%.2f*\n", user.Price))
-		report.WriteString(fmt.Sprintf("   📨 Получит: \"Сумма к оплате: %.2f\"\n", user.Price))
-		totalAmount += user.Price
+	for i, userModel := range users {
+		report.WriteString(fmt.Sprintf("%d. 👤 <b>%s</b>\n", i+1, utils.HtmlEscape(userModel.Username)))
+		report.WriteString(fmt.Sprintf("   📱 ID: <code>%d</code>\n", userModel.Uid))
+		report.WriteString(fmt.Sprintf("   💰 Сумма: <b>%.2f</b>\n", userModel.Price))
+		report.WriteString(fmt.Sprintf("   📨 Текст пользователю: сумма <b>%.2f</b>\n", userModel.Price))
+		totalAmount += userModel.Price
 		paidUsers++
 
 		report.WriteString("   ─────\n")
 	}
 
-	report.WriteString(fmt.Sprintf("\n📊 *Статистика:*\n"))
-	report.WriteString(fmt.Sprintf("   • Всего в списке: %d пользователей\n", len(users)))
-	report.WriteString(fmt.Sprintf("   • Получат уведомление: %d\n", paidUsers))
-	report.WriteString(fmt.Sprintf("   • Общая сумма: *%.2f*\n", totalAmount))
-	report.WriteString(fmt.Sprintf("⏰ *Время проверки:* %s",
+	report.WriteString(fmt.Sprintf("\n<b>📊 Итого</b>\n"))
+	report.WriteString(fmt.Sprintf("   • В списке: %d\n", len(users)))
+	report.WriteString(fmt.Sprintf("   • Уведомлений отправлено: %d\n", paidUsers))
+	report.WriteString(fmt.Sprintf("   • Сумма: <b>%.2f</b>\n", totalAmount))
+	report.WriteString(fmt.Sprintf("⏰ <b>Проверка</b> %s",
 		time.Now().Format("15:04 02.01.2006")))
 
 	msg := tgbotapi.NewMessage(job.cfg.AdminId, report.String())
-	msg.ParseMode = "Markdown"
+	msg.ParseMode = tgbotapi.ModeHTML
 
 	_, err := job.tg.Send(msg)
 	if err != nil {
 		log.Printf("❌ Ошибка отправки отчета админу: %v", err)
 	}
+}
+
+func formatDueDate(t *time.Time) string {
+	if t == nil {
+		return "—"
+	}
+	return t.Format("02.01.2006")
 }

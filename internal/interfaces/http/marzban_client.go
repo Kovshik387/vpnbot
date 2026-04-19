@@ -37,6 +37,41 @@ func NewMarzbanClient(baseUrl string, username string, password string) service.
 	}
 }
 
+func (m *marzbanClient) SetUserStatus(username string, status string) error {
+	if err := m.ensureToken(); err != nil {
+		return err
+	}
+
+	bodyStr, err := json.Marshal(map[string]interface{}{
+		"status": status,
+	})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, m.baseUrl+"/api/user/"+username, bytes.NewBuffer(bodyStr))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", m.tokenType+" "+m.token)
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return errors.New(string(body))
+	}
+
+	return nil
+}
+
 func (m *marzbanClient) Delete(username string) error {
 	if err := m.ensureToken(); err != nil {
 		return err

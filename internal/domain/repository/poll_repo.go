@@ -18,21 +18,21 @@ func NewPollRepository(db *sql.DB) *PollRepository {
 func (r *PollRepository) Init() error {
 	pollsTable := `
 create table if not exists polls (
-	poll_id        text primary key,
-	question       text not null,
-	is_anonymous   boolean not null,
-	allows_multiple boolean not null,
-	created_at     timestamp not null
+    poll_id text primary key
+  , question text not null
+  , is_anonymous boolean not null
+  , allows_multiple boolean not null
+  , created_at timestamp not null
 );`
 
 	optionsTable := `
 create table if not exists poll_options (
-	poll_id      text not null,
-	option_index integer not null,
-	text         text not null,
-	votes        integer not null default 0,
-	primary key (poll_id, option_index),
-	foreign key (poll_id) references polls(poll_id) on delete cascade
+    poll_id text not null
+  , option_index integer not null
+  , text text not null
+  , votes integer not null default 0
+  , primary key (poll_id, option_index)
+  , foreign key (poll_id) references polls (poll_id) on delete cascade
 );`
 
 	if _, err := r.db.Exec(pollsTable); err != nil {
@@ -63,25 +63,23 @@ func (r *PollRepository) UpsertPollResults(
 	}()
 
 	_, err = tx.Exec(`
-insert into polls(poll_id, question, is_anonymous, allows_multiple, created_at)
+insert into polls (poll_id, question, is_anonymous, allows_multiple, created_at)
 values (?, ?, ?, ?, ?)
-	on conflict(poll_id) do update set
-		question        = excluded.question,
-		is_anonymous    = excluded.is_anonymous,
-		allows_multiple = excluded.allows_multiple;
-`, pollID, question, isAnonymous, allowsMultiple, time.Now())
+on conflict (poll_id) do update set question = excluded.question
+     , is_anonymous = excluded.is_anonymous
+     , allows_multiple = excluded.allows_multiple`,
+		pollID, question, isAnonymous, allowsMultiple, time.Now())
 	if err != nil {
 		return err
 	}
 
 	for _, opt := range options {
 		_, err = tx.Exec(`
-insert into poll_options(poll_id, option_index, text, votes)
+insert into poll_options (poll_id, option_index, text, votes)
 values (?, ?, ?, ?)
-	on conflict(poll_id, option_index) do update set
-		text  = excluded.text,
-		votes = excluded.votes;
-`, pollID, opt.OptionIndex, opt.Text, opt.Votes)
+on conflict (poll_id, option_index) do update set text = excluded.text
+     , votes = excluded.votes`,
+			pollID, opt.OptionIndex, opt.Text, opt.Votes)
 		if err != nil {
 			return err
 		}
@@ -97,9 +95,13 @@ values (?, ?, ?, ?)
 
 func (r *PollRepository) GetPollResults(pollID string) (*model.PollResult, error) {
 	row := r.db.QueryRow(`
-select poll_id, question, is_anonymous, allows_multiple, created_at
-  from polls
- where poll_id = ?`, pollID)
+   select pl.poll_id as poll_id
+        , pl.question as question
+        , pl.is_anonymous as is_anonymous
+        , pl.allows_multiple as allows_multiple
+        , pl.created_at as created_at
+     from polls pl
+    where pl.poll_id = ?`, pollID)
 
 	var pr model.PollResult
 	err := row.Scan(&pr.PollID, &pr.Question, &pr.IsAnonymous, &pr.AllowsMultiple, &pr.CreatedAt)
@@ -111,10 +113,12 @@ select poll_id, question, is_anonymous, allows_multiple, created_at
 	}
 
 	rows, err := r.db.Query(`
-select option_index, text, votes
-  from poll_options
- where poll_id = ?
- order by option_index`, pollID)
+   select po.option_index as option_index
+        , po.text as text
+        , po.votes as votes
+     from poll_options po
+    where po.poll_id = ?
+ order by po.option_index`, pollID)
 	if err != nil {
 		return nil, err
 	}
@@ -138,9 +142,13 @@ select option_index, text, votes
 
 func (r *PollRepository) ListPolls() ([]model.PollResult, error) {
 	rows, err := r.db.Query(`
-select poll_id, question, is_anonymous, allows_multiple, created_at
-  from polls
- order by created_at desc`)
+   select pl.poll_id as poll_id
+        , pl.question as question
+        , pl.is_anonymous as is_anonymous
+        , pl.allows_multiple as allows_multiple
+        , pl.created_at as created_at
+     from polls pl
+ order by pl.created_at desc`)
 	if err != nil {
 		return nil, err
 	}

@@ -16,9 +16,9 @@ func NewMessageBuilder() service.MessageService {
 	return &messageBuilder{}
 }
 
-func (*messageBuilder) SendUserInfo(user model.User) (string, bool, error) {
+func (*messageBuilder) SendUserInfo(user model.User, price float64) (string, bool, error) {
 	now := time.Now().Add(3 * time.Hour)
-	separator := "----------------------------------------\n"
+	separator := "──────────────\n"
 
 	dateFlag := false
 	isActive := false
@@ -52,21 +52,28 @@ func (*messageBuilder) SendUserInfo(user model.User) (string, bool, error) {
 	log.Println(user.UsedTraffic)
 	usage := float64(user.UsedTraffic) / (1024 * 1024 * 1024)
 
+	priceLine := ""
+	if price > 0 {
+		priceLine = fmt.Sprintf("<b>Оплата</b> %.2f\n", price)
+	}
+
 	response := fmt.Sprintf(
-		"%s<b>Username:</b> %s\n"+
-			"<b>Status:</b> %s\n"+
-			"<b>OnlineAt:</b> %s\n"+
-			"<b>Usage:</b> %.1f GB\n"+
-			"<b>Для телефона ссылка на подписку:</b> <a href=\"%s\">ссылка</a>\n"+
-			"<b>Для компьютера:</b> <tg-spoiler><code>%s</code></tg-spoiler>\n"+
+		"%s<b>Логин</b> %s\n"+
+			"<b>Статус</b> %s\n"+
+			"<b>Последняя активность</b> %s\n"+
+			"<b>Трафик</b> %.1f ГБ\n"+
+			"%s"+
+			"<b>Подписка (телефон)</b> <a href=\"%s\">открыть</a>\n"+
+			"<b>Конфиг (ПК)</b> <tg-spoiler><code>%s</code></tg-spoiler>\n"+
 			"%s",
 		separator,
 		utils.HtmlEscape(user.Username),
 		utils.HtmlEscape(statusStr),
 		utils.HtmlEscape(onlineAtStr),
 		usage,
+		priceLine,
 		user.SubscribedUrl,
-		user.Links[0],
+		utils.HtmlEscape(user.Links[0]),
 		separator,
 	)
 

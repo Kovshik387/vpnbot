@@ -10,16 +10,22 @@ import (
 )
 
 type UserUsecase struct {
-	marzbanClient  service.MarzbanService
-	yandexClient   service.YandexService
-	userRepository *repository.UserRepository
-	pollRepository *repository.PollRepository
+	marzbanClient     service.MarzbanService
+	yandexClient      service.YandexService
+	userRepository    *repository.UserRepository
+	pollRepository    *repository.PollRepository
+	paymentReportRepo *repository.PaymentReportRepository
 }
 
 func NewUserUsecase(marzbanClient service.MarzbanService, yandexService service.YandexService,
-	userRepository *repository.UserRepository, pollRepository *repository.PollRepository) *UserUsecase {
-	return &UserUsecase{marzbanClient: marzbanClient, userRepository: userRepository, pollRepository: pollRepository,
-		yandexClient: yandexService}
+	userRepository *repository.UserRepository, pollRepository *repository.PollRepository, paymentReportRepo *repository.PaymentReportRepository) *UserUsecase {
+	return &UserUsecase{
+		marzbanClient:     marzbanClient,
+		userRepository:    userRepository,
+		pollRepository:    pollRepository,
+		yandexClient:      yandexService,
+		paymentReportRepo: paymentReportRepo,
+	}
 }
 
 func (u *UserUsecase) SavePollResults(poll *model.PollResult) error {
@@ -115,6 +121,18 @@ func (u *UserUsecase) GetUserByUserId(uid int64) (string, error) {
 	return u.userRepository.GetUsernameByUserID(uid)
 }
 
+func (u *UserUsecase) GetPriceByUserID(uid int64) (float64, error) {
+	return u.userRepository.GetPriceByUserID(uid)
+}
+
+func (u *UserUsecase) GetPriceByUsername(username string) (float64, error) {
+	return u.userRepository.GetPriceByUsername(username)
+}
+
+func (u *UserUsecase) GetPaymentDateByUserID(uid int64) (*time.Time, error) {
+	return u.userRepository.GetPaymentDateByUserID(uid)
+}
+
 func (u *UserUsecase) ListBlocked() ([]model.TgUserModel, error) {
 	return u.userRepository.GetBlocked()
 }
@@ -137,4 +155,8 @@ func (u *UserUsecase) Skebob(url string) (string, error) {
 
 func (u *UserUsecase) AddCompensationDays(daysCount int) error {
 	return u.userRepository.AddCompensationDays(daysCount)
+}
+
+func (u *UserUsecase) NormalizePaymentDatesToCurrentMonth(now time.Time) (int64, error) {
+	return u.userRepository.NormalizePaymentDatesToCurrentMonth(now)
 }

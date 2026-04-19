@@ -1,17 +1,22 @@
 package router
 
 import (
+	"strconv"
+	"strings"
+
 	"VpnBot/config"
 	"VpnBot/internal/app/handlers/admin"
 	"VpnBot/internal/app/handlers/user"
+	"VpnBot/internal/app/ui"
 	"VpnBot/internal/app/usecases"
 	"errors"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type CallbackHandler func(update tgbotapi.Update, bot *tgbotapi.BotAPI)
 
-func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsecase, config *config.Config) map[string]CallbackHandler {
+func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsecase, config *config.Config, uir *UIRepos) map[string]CallbackHandler {
 	return map[string]CallbackHandler{
 		"approve:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			err := checkCallbackPermission(update, bot, config.AdminId)
@@ -28,7 +33,7 @@ func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsec
 			admin.DenyHandler(update, bot, cdUC, config.AdminId)
 		},
 		"request_key": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-			user.GetKeyHandler(update, bot, cdUC, config.AdminId)
+			user.GetKeyHandler(update, bot, cdUC, config.AdminId, uir.Panel, userUC)
 		},
 		"block:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			err := checkCallbackPermission(update, bot, config.AdminId)
@@ -38,94 +43,105 @@ func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsec
 			admin.BlockUserHandler(update, bot, userUC, config.AdminId)
 		},
 		"ping_server": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-			user.PingHandler(update, bot, config.RussianUrl, config.AdminId)
+			user.PingHandler(update, bot, config.RussianUrl, config.AdminId, uir.Panel)
 		},
 		"help": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-			user.HelpHandler(update, bot, config.AdminId)
+			user.HelpHandler(update, bot, config.AdminId, uir.Panel)
 		},
 		"subscribe": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-			user.GetSubscribeHandler(update, bot, userUC)
+			user.GetSubscribeHandler(update, bot, userUC, uir.Panel)
 		},
 		"info": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-			user.InfoHandler(update, bot)
+			user.InfoHandler(update, bot, uir.Panel)
+		},
+		"panel_home": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			user.HomePanel(update, bot, config.AdminId, uir.Panel, userUC)
+		},
+		"pay_seen": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			user.PaymentSeenHandler(update, bot)
+		},
+		"payment_flow": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			user.PaymentFlowHandler(update, bot, userUC, uir.Panel)
+		},
+		"pc:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			err := checkCallbackPermission(update, bot, config.AdminId)
+			if err != nil {
+				return
+			}
+			idStr := strings.TrimPrefix(update.CallbackQuery.Data, "pc:")
+			targetID, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Некорректный id"))
+				return
+			}
+			admin.PaymentProofConfirmHandler(update, bot, userUC, config.AdminId, targetID, uir.Panel)
+		},
+		"pd:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			err := checkCallbackPermission(update, bot, config.AdminId)
+			if err != nil {
+				return
+			}
+			idStr := strings.TrimPrefix(update.CallbackQuery.Data, "pd:")
+			targetID, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Некорректный id"))
+				return
+			}
+			admin.PaymentProofDenyHandler(update, bot, userUC, config.AdminId, targetID, uir.Panel)
+		},
+		"sayl:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			offStr := strings.TrimPrefix(update.CallbackQuery.Data, "sayl:")
+			off, _ := strconv.Atoi(offStr)
+			user.SayLogsPage(update, bot, uir.SayLog, uir.Panel, off)
+		},
+		"sayd:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			idStr := strings.TrimPrefix(update.CallbackQuery.Data, "sayd:")
+			id, _ := strconv.ParseInt(idStr, 10, 64)
+			user.SayLogDetail(update, bot, uir.SayLog, uir.Panel, id)
 		},
 		"info_phone": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-			deletePreview(update, bot)
-			text := "📱 Инструкция для телефона:\n" +
-				"1. Скачайте приложение VPN клиент\n" +
-				"2. Вставьте ваш токен\n" +
-				"3. Подключитесь и пользуйтесь\n" +
-				"Если вы находитесь в Воронеже или другом городе, где могут блокировать интернет, можно обойти ограничения через подписку. Подписка позволяет выбрать VPN с лучшим соединением или специальную конфигурацию для обхода блокировок: скопируйте ссылку из SUB URL и вставьте её в раздел 'Добавить из буфера'.\n" +
-				"Подробная инструкция по обновлению и выбору подписки доступна [здесь](https://disk.yandex.ru/i/HT13HcKOYOQ8BQ)"
-
-			keyboard := tgbotapi.NewInlineKeyboardMarkup(
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonURL("📱 iPhone",
-						"https://apps.apple.com/ru/app/v2raytun/id6476628951"),
-					tgbotapi.NewInlineKeyboardButtonURL("🤖 Android",
-						"https://play.google.com/store/apps/details?id=com.v2raytun.android&hl=ru"),
-				),
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("📋 Список команд", "help"),
-				),
-			)
-
-			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, text)
-			msg.ParseMode = "Markdown"
-			msg.ReplyMarkup = keyboard
-
-			_, _ = bot.Send(msg)
+			_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+			uid := update.CallbackQuery.From.ID
+			text := "<b>📱 Телефон</b>\n\n" +
+				"1. Установите клиент (кнопки ниже).\n" +
+				"2. Импортируйте выданный токен или ссылку подписки.\n" +
+				"3. Выберите профиль и подключитесь.\n\n" +
+				"<b>Подписка (SUB)</b>\n" +
+				"Если в регионе режут доступ, удобнее работать через подписку: скопируйте SUB URL из раздела «Моя подписка» и в клиенте выберите «Добавить из буфера» / импорт по ссылке.\n\n" +
+				"📎 <a href=\"" + ui.URLPhoneSub + "\">Подробная инструкция на Яндекс.Диске</a>"
+			kb := ui.InfoPhoneKeyboard()
+			user.EditPanelFromUpdate(bot, uir.Panel, update, uid, text, &kb, true)
 		},
 		"info_pc": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-			deletePreview(update, bot)
-			text := "💻 Инструкция для компьютера:\n" +
-				"1. Установите v2RayN или другой клиент\n" +
-				"2. Импортируйте токен в приложение\n" +
-				"3. Подключитесь\n" +
-				"Более гибкая настройка и объяснение что происходит по кнопке"
-
-			keyboard := tgbotapi.NewInlineKeyboardMarkup(
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonURL("V2RayN",
-						"https://disk.yandex.ru/d/KmfPMvw42gMSYg"),
-					tgbotapi.NewInlineKeyboardButtonURL("Что у вас здесь происходит",
-						"https://disk.yandex.ru/i/fHv8u6gQ0hFKzg"),
-				),
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("📋 Список команд", "help"),
-				),
-			)
-
-			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, text)
-			msg.ReplyMarkup = keyboard
-			_, _ = bot.Send(msg)
-
+			_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+			uid := update.CallbackQuery.From.ID
+			text := "<b>💻 Компьютер</b>\n\n" +
+				"1. Установите <b>V2RayN</b> (или совместимый клиент).\n" +
+				"2. Импортируйте токен / ссылку из бота.\n" +
+				"3. Активируйте профиль и подключитесь.\n\n" +
+				"Дополнительно — разбор настроек и типичных вопросов по кнопке «Обзор настроек»."
+			kb := ui.InfoPCKeyboard()
+			user.EditPanelFromUpdate(bot, uir.Panel, update, uid, text, &kb, true)
 		},
 		"info_tv": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-			_, _ = bot.Request(tgbotapi.NewDeleteMessage(
-				update.CallbackQuery.Message.Chat.ID,
-				update.CallbackQuery.Message.MessageID,
-			))
-			text := "📺 Инструкция для телевизора:\n" +
-				"1. Установите VPN-приложение из магазина приложений v2RayTun\n" +
-				"2. Пишите @KovshikGo"
-			_, _ = bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, text))
+			_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+			uid := update.CallbackQuery.From.ID
+			text := "<b>📺 Телевизор</b>\n\n" +
+				"1. Установите поддерживаемый клиент из магазина приложений ТВ (часто ищут по названию <b>v2RayTun</b> или аналог для вашей платформы).\n" +
+				"2. Импортируйте токен так же, как на телефоне.\n" +
+				"3. Если модель редкая или клиент не ставится — напишите в поддержку, подскажем вариант."
+			kb := ui.InfoTVKeyboard()
+			user.EditPanelFromUpdate(bot, uir.Panel, update, uid, text, &kb, true)
 		},
 	}
 }
 
 func checkCallbackPermission(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) error {
 	if update.CallbackQuery.Message.Chat.ID != adminId {
-		msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "У тебя нет доступа к этой команде")
+		msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
+			"🔒 Это действие только для администратора.")
 		_, _ = bot.Send(msg)
 		return errors.New("У тебя нет доступа к этой команде")
 	}
 	return nil
-}
-
-func deletePreview(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-	_, _ = bot.Request(tgbotapi.NewDeleteMessage(
-		update.CallbackQuery.Message.Chat.ID,
-		update.CallbackQuery.Message.MessageID,
-	))
 }

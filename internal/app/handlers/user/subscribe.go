@@ -1,15 +1,17 @@
 package user
 
 import (
-	"VpnBot/internal/app/ui"
-	"VpnBot/internal/app/usecases"
-	interfaces "VpnBot/internal/interfaces/http"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	"VpnBot/internal/app/usecases"
+	"VpnBot/internal/domain/repository"
+	interfaces "VpnBot/internal/interfaces/http"
 )
 
-func GetSubscribeHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase) {
+func GetSubscribeHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase, pr *repository.PanelRepository) {
 	var (
 		uid             int64
 		currentUsername string
@@ -37,9 +39,9 @@ func GetSubscribeHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *u
 	storedUsername, err := userUC.GetUserByUserId(uid)
 	if err != nil {
 		log.Println("failed to get stored username by user id:", err)
-		msg := tgbotapi.NewMessage(uid, "Ошибка при получении подписки")
-		msg.ReplyMarkup = ui.MainKeyboard()
-		_, _ = bot.Send(msg)
+		t := "Не удалось загрузить подписку. Попробуйте позже или напишите администратору."
+		kb := MainMenuKeyboard(userUC, uid, false)
+		EditPanelFromUpdate(bot, pr, update, uid, t, &kb, true)
 		return
 	}
 
@@ -50,26 +52,30 @@ func GetSubscribeHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *u
 
 	user, err := userUC.SearchUser(effectiveUsername)
 	if err != nil {
-		msg := tgbotapi.NewMessage(uid, "Ошибка при получении подписки")
-		msg.ReplyMarkup = ui.MainKeyboard()
-		_, _ = bot.Send(msg)
+		t := "Не удалось получить данные подписки. Попробуйте позже или напишите администратору."
+		kb := MainMenuKeyboard(userUC, uid, false)
+		EditPanelFromUpdate(bot, pr, update, uid, t, &kb, true)
 		return
 	}
 
 	mb := interfaces.NewMessageBuilder()
-	response, _, err := mb.SendUserInfo(user)
+	price, err := userUC.GetPriceByUserID(uid)
+	if err != nil {
+		log.Println("failed to get user price:", err)
+		price = 0
+	}
+	response, _, err := mb.SendUserInfo(user, price)
 	if err != nil {
 		log.Println("Ошибка при формировании сообщения:", err)
-		msg := tgbotapi.NewMessage(uid, "Ошибка при формировании сообщения")
-		msg.ReplyMarkup = ui.MainKeyboard()
-		_, _ = bot.Send(msg)
+		t := "Данные подписки получены, но не удалось оформить сообщение. Обратитесь к администратору."
+		kb := MainMenuKeyboard(userUC, uid, false)
+		EditPanelFromUpdate(bot, pr, update, uid, t, &kb, true)
 		return
 	}
+	if paidUntil, err := userUC.GetPaymentDateByUserID(uid); err == nil && paidUntil != nil {
+		response += fmt.Sprintf("\n<b>Оплачен до</b> %s", paidUntil.Format("02.01.2006"))
+	}
 
-	msg := tgbotapi.NewMessage(uid, response)
-	msg.ParseMode = tgbotapi.ModeHTML
-	msg.ReplyMarkup = ui.MainKeyboard()
-	_, _ = bot.Send(msg)
-
-	InfoHandler(update, bot)
+	kb := MainMenuKeyboard(userUC, uid, false)
+	EditPanelFromUpdate(bot, pr, update, uid, response, &kb, true)
 }

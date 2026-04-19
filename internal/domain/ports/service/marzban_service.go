@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"VpnBot/internal/domain/model"
@@ -10,4 +10,5 @@ type MarzbanService interface {
 	GetUser(username string) (model.User, error)
 	AddUser(username string) (model.User, error)
 	Delete(username string) error
+	SetUserStatus(username string, status string) error
 }

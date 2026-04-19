@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"VpnBot/internal/app/ui"
 	interfaces "VpnBot/internal/interfaces/http"
 	"log"
 	"strconv"
@@ -48,16 +49,25 @@ func ApproveHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecas
 		}
 	}
 
-	info, _, err := interfaces.NewMessageBuilder().SendUserInfo(user)
+	price, err := userUC.GetPriceByUserID(int64(userId))
+	if err != nil {
+		log.Println("approve price:", err)
+		price = 0
+	}
+
+	info, _, err := interfaces.NewMessageBuilder().SendUserInfo(user, price)
 	if err != nil {
 		return
 	}
 
 	callback := tgbotapi.NewMessage(int64(userId), "✅ Ключ выдан")
+	kb := ui.PanelShortcutKeyboard()
+	callback.ReplyMarkup = kb
 	_, _ = bot.Request(callback)
 
 	msgToUser := tgbotapi.NewMessage(int64(userId), info)
 	msgToUser.ParseMode = "Html"
+	msgToUser.ReplyMarkup = kb
 	_, _ = bot.Send(msgToUser)
 
 	delMsg := tgbotapi.NewDeleteMessage(adminId, update.CallbackQuery.Message.MessageID)
