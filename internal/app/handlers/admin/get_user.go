@@ -22,8 +22,13 @@ func SearchUserHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 	}
 
 	mb := interfaces.NewMessageBuilder()
+	price, err := userUC.GetPriceByUsername(user.Username)
+	if err != nil {
+		log.Println("Ошибка при получении цены пользователя:", err)
+		price = 0
+	}
 
-	response, _, err := mb.SendUserInfo(user)
+	response, _, err := mb.SendUserInfo(user, price)
 	if err != nil {
 		log.Println("Ошибка при формировании сообщения")
 	}

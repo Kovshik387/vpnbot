@@ -23,7 +23,13 @@ func UserListHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *useca
 
 	mb := interfaces.NewMessageBuilder()
 	for _, u := range users.Users {
-		response, act, err := mb.SendUserInfo(u)
+		price, err := userUC.GetPriceByUsername(u.Username)
+		if err != nil {
+			log.Println("Ошибка при получении цены пользователя:", err)
+			price = 0
+		}
+
+		response, act, err := mb.SendUserInfo(u, price)
 		if err != nil {
 			log.Println("Ошибка при формировании сообщения:", err)
 			continue

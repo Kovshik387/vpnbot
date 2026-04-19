@@ -1,0 +1,149 @@
+package usecases
+
+import (
+	"VpnBot/internal/domain/model"
+	"time"
+)
+
+type BillingReminderKind int
+
+const (
+	BillingRemind2d BillingReminderKind = iota
+	BillingRemind1d
+	BillingRemindDue
+	BillingNewlyRevoked
+)
+
+type BillingReminderOut struct {
+	User model.TgUserModel
+	Kind BillingReminderKind
+}
+
+func calendarDaysUntilDue(paymentDate *time.Time, now time.Time) int {
+	if paymentDate == nil {
+		return 99999
+	}
+	loc := now.Location()
+	due := time.Date(paymentDate.Year(), paymentDate.Month(), paymentDate.Day(), 0, 0, 0, 0, loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	return int(due.Sub(today).Hours() / 24)
+}
+
+func nextPaymentDateAfterConfirm(oldDue *time.Time, now time.Time) time.Time {
+	loc := now.Location()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	if oldDue == nil {
+		return today.AddDate(0, 1, 0)
+	}
+	dueDay := time.Date(oldDue.Year(), oldDue.Month(), oldDue.Day(), 0, 0, 0, 0, loc)
+	base := dueDay
+	if base.Before(today) {
+		base = today
+	}
+	return base.AddDate(0, 1, 0)
+}
+
+func (u *UserUsecase) ListPaidBillingUsers() ([]model.TgUserModel, error) {
+	return u.userRepository.ListPaidUsersForBilling()
+}
+
+func (u *UserUsecase) ProcessBillingReminders(now time.Time) (dueToday []model.TgUserModel, outs []BillingReminderOut, err error) {
+	users, err := u.userRepository.ListPaidUsersForBilling()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, usr := range users {
+		d := calendarDaysUntilDue(usr.PaymentDate, now)
+
+		if d == 0 && usr.PaymentDate != nil {
+			dueToday = append(dueToday, usr)
+		}
+
+		if d < 0 {
+			if !usr.PaymentAccessRevoked {
+				username, err := u.userRepository.GetUsernameByUserID(usr.Uid)
+				if err != nil {
+					return nil, nil, err
+				}
+				if username != "" {
+					if err := u.marzbanClient.SetUserStatus(username, "disabled"); err != nil {
+						return nil, nil, err
+					}
+				}
+				if err := u.userRepository.SetPaymentAccessRevoked(usr.Uid, true); err != nil {
+					return nil, nil, err
+				}
+				outs = append(outs, BillingReminderOut{User: usr, Kind: BillingNewlyRevoked})
+			}
+			continue
+		}
+
+		if usr.PaymentAccessRevoked {
+			continue
+		}
+
+		switch {
+		case d == 2 && usr.PaymentReminderStage < 1:
+			if err := u.userRepository.SetPaymentReminderStage(usr.Uid, 1); err != nil {
+				return nil, nil, err
+			}
+			outs = append(outs, BillingReminderOut{User: usr, Kind: BillingRemind2d})
+		case d == 1 && usr.PaymentReminderStage < 2:
+			if err := u.userRepository.SetPaymentReminderStage(usr.Uid, 2); err != nil {
+				return nil, nil, err
+			}
+			outs = append(outs, BillingReminderOut{User: usr, Kind: BillingRemind1d})
+		case d == 0 && usr.PaymentReminderStage < 3:
+			if err := u.userRepository.SetPaymentReminderStage(usr.Uid, 3); err != nil {
+				return nil, nil, err
+			}
+			outs = append(outs, BillingReminderOut{User: usr, Kind: BillingRemindDue})
+		}
+	}
+
+	return dueToday, outs, nil
+}
+
+func (u *UserUsecase) CheckPaymentRevoked(userID int64) (bool, error) {
+	return u.userRepository.CheckPaymentRevoked(userID)
+}
+
+func (u *UserUsecase) IsPaidSubscription(userID int64) (bool, error) {
+	return u.userRepository.IsPaidSubscription(userID)
+}
+
+func (u *UserUsecase) SetAwaitingPaymentScreenshot(userID int64, v bool) error {
+	return u.userRepository.SetAwaitingPaymentScreenshot(userID, v)
+}
+
+func (u *UserUsecase) GetAwaitingPaymentScreenshot(userID int64) (bool, error) {
+	return u.userRepository.GetAwaitingPaymentScreenshot(userID)
+}
+
+func (u *UserUsecase) ConfirmExtensionAfterPayment(userID int64) error {
+	old, err := u.userRepository.GetPaymentDateByUserID(userID)
+	if err != nil {
+		return err
+	}
+	next := nextPaymentDateAfterConfirm(old, time.Now())
+	if err := u.userRepository.ApplyConfirmedPaymentExtension(userID, next); err != nil {
+		return err
+	}
+
+	username, err := u.userRepository.GetUsernameByUserID(userID)
+	if err != nil {
+		return err
+	}
+	if username == "" {
+		return nil
+	}
+	if err := u.marzbanClient.SetUserStatus(username, "active"); err != nil {
+		return err
+	}
+	return u.LogConfirmedPayment(userID)
+}
+
+func (u *UserUsecase) RejectPaymentProof(userID int64) error {
+	return u.userRepository.SetAwaitingPaymentScreenshot(userID, false)
+}

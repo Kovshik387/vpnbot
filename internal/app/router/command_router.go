@@ -15,23 +15,23 @@ import (
 
 type CommandHandler func(update tgbotapi.Update, bot *tgbotapi.BotAPI)
 
-func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[string]CommandHandler {
+func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config, ui *UIRepos) map[string]CommandHandler {
 	var baseHandlers = make(map[string]CommandHandler)
 
 	baseHandlers["start"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		user.StartHandler(update, bot, config.AdminId)
+		user.StartHandler(update, bot, config.AdminId, ui.Panel, userUC)
 	}
 
 	baseHandlers["ping"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		user.PingHandler(update, bot, config.RussianUrl, config.AdminId)
+		user.PingHandler(update, bot, config.RussianUrl, config.AdminId, ui.Panel)
 	}
 
 	baseHandlers["help"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		user.HelpHandler(update, bot, config.AdminId)
+		user.HelpHandler(update, bot, config.AdminId, ui.Panel)
 	}
 
 	baseHandlers["info"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		user.InfoHandler(update, bot)
+		user.InfoHandler(update, bot, ui.Panel)
 	}
 
 	baseHandlers["adduser"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
@@ -117,7 +117,7 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 			return
 		}
 
-		admin.SayCommandHandler(update, bot, userUC)
+		admin.SayCommandHandler(update, bot, userUC, ui.SayLog)
 	}
 	baseHandlers["poll_result"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		if err := checkPermission(update, bot, config.AdminId); err != nil {
@@ -222,7 +222,7 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 	}
 
 	baseHandlers["subscribe"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-		user.GetSubscribeHandler(update, bot, userUC)
+		user.GetSubscribeHandler(update, bot, userUC, ui.Panel)
 	}
 
 	baseHandlers["compensation"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
@@ -276,6 +276,24 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config) map[s
 		admin.OverrideDateHandler(update, bot, userUC, args[0], args[1])
 	}
 
+	baseHandlers["paystats"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		admin.PaymentMonthlyReportHandler(update, bot, userUC, update.Message.CommandArguments())
+	}
+
+	baseHandlers["normalizepay"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		err := checkPermission(update, bot, config.AdminId)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		admin.NormalizePaymentDatesHandler(update, bot, userUC)
+	}
+
 	return baseHandlers
 }
 
@@ -292,7 +310,8 @@ func checkArgs(update tgbotapi.Update, bot *tgbotapi.BotAPI, str string) (string
 
 func checkPermission(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) error {
 	if update.Message.From.ID != adminId {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "У тебя нет доступа к этой команде")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID,
+			"🔒 Эта команда только для администратора.")
 		_, _ = bot.Send(msg)
 		return errors.New("У тебя нет доступа к этой команде" + strconv.Itoa(int(update.Message.From.ID)))
 	}

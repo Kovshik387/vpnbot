@@ -3,10 +3,13 @@ package model
 import "time"
 
 type TgUserModel struct {
-	Uid         int64
-	Username    string
-	IsBlock     bool
-	Price       float64
-	IsFree      bool
-	PaymentDate *time.Time
+	Uid                       int64
+	Username                  string
+	IsBlock                   bool
+	Price                     float64
+	IsFree                    bool
+	PaymentDate               *time.Time
+	PaymentReminderStage      int
+	PaymentAccessRevoked      bool
+	AwaitingPaymentScreenshot bool
 }

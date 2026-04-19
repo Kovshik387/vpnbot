@@ -1,19 +1,25 @@
 package admin
 
 import (
-	"VpnBot/internal/app/usecases"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"fmt"
 	"log"
 	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	"VpnBot/internal/app/ui"
+	"VpnBot/internal/app/usecases"
+	"VpnBot/internal/domain/repository"
 )
 
-func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase) {
+func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase, sayLog *repository.SayLogRepository) {
 	if update.Message == nil {
 		return
 	}
 
 	msg := update.Message
 	var makeMsg func(chatID int64) tgbotapi.Chattable
+	var logKind, logBody string
 
 	if msg.ReplyToMessage != nil {
 		src := msg.ReplyToMessage
@@ -23,12 +29,20 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 			photos := src.Photo
 			last := photos[len(photos)-1]
 
-			caption := src.Caption
+			caption := strings.TrimSpace(src.Caption)
+			logKind = "photo"
+			if caption == "" {
+				logBody = "[Фото без подписи]"
+			} else {
+				logBody = "[Фото] " + caption
+			}
 
 			makeMsg = func(chatID int64) tgbotapi.Chattable {
 				photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileID(last.FileID))
-				photo.Caption = caption
+				photo.Caption = src.Caption
 				photo.DisableNotification = true
+				kb := ui.PanelShortcutKeyboard()
+				photo.ReplyMarkup = kb
 				return photo
 			}
 
@@ -38,6 +52,8 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 			for i, o := range poll.Options {
 				options[i] = o.Text
 			}
+			logKind = "poll"
+			logBody = poll.Question + "\n" + strings.Join(options, " · ")
 
 			makeMsg = func(chatID int64) tgbotapi.Chattable {
 				p := tgbotapi.NewPoll(chatID, poll.Question, options...)
@@ -49,10 +65,14 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 
 		case src.Text != "":
 			text := src.Text
+			logKind = "text"
+			logBody = text
 
 			makeMsg = func(chatID int64) tgbotapi.Chattable {
 				m := tgbotapi.NewMessage(chatID, text)
 				m.DisableNotification = true
+				kb := ui.PanelShortcutKeyboard()
+				m.ReplyMarkup = kb
 				return m
 			}
 
@@ -71,14 +91,18 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 			return
 		}
 
+		logKind = "text"
+		logBody = text
+
 		makeMsg = func(chatID int64) tgbotapi.Chattable {
 			m := tgbotapi.NewMessage(chatID, text)
 			m.DisableNotification = true
+			kb := ui.PanelShortcutKeyboard()
+			m.ReplyMarkup = kb
 			return m
 		}
 	}
 
-	// Общая рассылка
 	err := broadcastToActive(bot, userUC, makeMsg)
 	if err != nil {
 		log.Println("broadcast error:", err)
@@ -87,8 +111,14 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 		return
 	}
 
+	if sayLog != nil && logBody != "" {
+		if insErr := sayLog.Insert(logKind, logBody); insErr != nil {
+			log.Println("say log insert:", insErr)
+		}
+	}
+
 	_, _ = bot.Send(tgbotapi.NewMessage(msg.Chat.ID,
-		"Сообщение отправлено всем активным пользователям ✅"))
+		fmt.Sprintf("Сообщение отправлено всем активным пользователям ✅\nВ лог объявлений добавлена запись (%s).", logKind)))
 }
 
 func broadcastToActive(
@@ -106,12 +136,12 @@ func broadcastToActive(
 			continue
 		}
 
-		msg := makeMsg(u.Uid)
-		if msg == nil {
+		out := makeMsg(u.Uid)
+		if out == nil {
 			continue
 		}
 
-		if _, sendErr := bot.Send(msg); sendErr != nil {
+		if _, sendErr := bot.Send(out); sendErr != nil {
 			log.Printf("Не удалось отправить сообщение пользователю %s (%d): %v",
 				u.Username, u.Uid, sendErr)
 		}

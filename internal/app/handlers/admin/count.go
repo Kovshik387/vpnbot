@@ -25,7 +25,7 @@ func UserActivityCount(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 	count := 0
 	mb := interfaces.NewMessageBuilder()
 	for _, u := range users.Users {
-		_, act, err := mb.SendUserInfo(u)
+		_, act, err := mb.SendUserInfo(u, 0)
 		if err != nil {
 			log.Println("Ошибка при формировании сообщения:", err)
 			continue
