@@ -12,8 +12,12 @@ func StartHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, p
 	if update.Message == nil {
 		return
 	}
+
+	chatID := update.Message.Chat.ID
+	messageID := update.Message.MessageID
 	pr.Clear(update.Message.From.ID)
 	HomePanel(update, bot, adminId, pr, userUC)
+	_, _ = bot.Request(tgbotapi.NewDeleteMessage(chatID, messageID))
 }
 
 func HomePanel(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *repository.PanelRepository, userUC *usecases.UserUsecase) {
