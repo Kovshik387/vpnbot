@@ -23,6 +23,9 @@ func main() {
 		log.Fatal("Ошибка загрузки .env файла")
 		return
 	}
+	if err := config.SetupLog(); err != nil {
+		log.Fatal(err)
+	}
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -130,7 +133,7 @@ func main() {
 					handler(update, bot)
 				}
 			case ui.BtnShowPanel:
-				user.HomePanel(update, bot, cfg.AdminId, panelRepo, userUC)
+				user.StartHandler(update, bot, cfg.AdminId, panelRepo, userUC)
 			case "./start":
 				if handler, ok := commandRouter["start"]; ok {
 					handler(update, bot)

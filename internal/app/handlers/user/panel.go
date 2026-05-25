@@ -138,12 +138,15 @@ func SendNotificationHTMLForUser(bot *tgbotapi.BotAPI, userID int64, text string
 	return SendNotificationHTML(bot, userID, text, markup, disableWebPreview)
 }
 
-// EnsureReplyKeyboard показывает постоянные кнопки «Проверить подписку» и «Показать панель».
+// EnsureReplyKeyboard включает постоянные кнопки внизу без отдельного текста в чате.
 func EnsureReplyKeyboard(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "⌨️ Быстрые кнопки внизу экрана обновлены.")
+	msg := tgbotapi.NewMessage(chatID, "\u200b")
 	msg.ReplyMarkup = ui.MainKeyboard()
-	_, err := bot.Send(msg)
+	msg.DisableNotification = true
+	sent, err := bot.Send(msg)
 	if err != nil {
 		log.Println("reply keyboard:", err)
+		return
 	}
+	_, _ = bot.Request(tgbotapi.NewDeleteMessage(chatID, sent.MessageID))
 }

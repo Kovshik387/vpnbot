@@ -278,7 +278,8 @@ func sendLogUsage(bot *tgbotapi.BotAPI, chatID int64, paths []string) {
 func sendLogSetupHelp(bot *tgbotapi.BotAPI, chatID int64) {
 	msg := tgbotapi.NewMessage(chatID,
 		"<b>Логи из файла</b>\n\n"+
-			"Укажите в <code>.env</code> один или несколько файлов через запятую:\n"+
+			"В <code>.env</code> задайте <code>BOT_LOG_PATH</code> — бот пишет туда логи и читает их по <code>/logs</code>.\n"+
+			"Несколько файлов для чтения:\n"+
 			"<code>BOT_LOG_PATH=/var/log/vpnbot.log</code>\n"+
 			"<code>BOT_LOG_PATHS=/var/log/vpnbot.log,/var/log/vpnbot.err.log</code>\n\n"+
 			"Затем: <code>/logs</code> или <code>/logs 50</code>")
