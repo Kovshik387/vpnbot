@@ -116,11 +116,11 @@ func (r *UserRepository) columnExists(columnName string) (bool, error) {
 	return exists, nil
 }
 
-func (r *UserRepository) Insert(user string, uid int64) error {
+func (r *UserRepository) Insert(user string, uid int64, paymentDate time.Time) error {
 	_, err := r.db.Exec(`
 insert into users (user_id, username, is_block, price, is_free, payment_date)
 values (?, ?, ?, ?, ?, ?)`,
-		uid, user, false, 250.0, false, time.Now())
+		uid, user, false, 250.0, false, paymentDate)
 	return err
 }
 

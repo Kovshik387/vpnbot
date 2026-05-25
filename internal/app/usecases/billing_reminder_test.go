@@ -71,7 +71,7 @@ func TestProcessBillingReminders_Stages(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	const uid int64 = 101
-	if err := userRepo.Insert("alice", uid); err != nil {
+	if err := userRepo.Insert("alice", uid, time.Now()); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 
@@ -133,7 +133,7 @@ func TestProcessBillingReminders_OverdueDisablesSubscription(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	const uid int64 = 202
-	if err := userRepo.Insert("bob", uid); err != nil {
+	if err := userRepo.Insert("bob", uid, time.Now()); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 
@@ -168,7 +168,7 @@ func TestConfirmExtensionAfterPayment_EnablesSubscriptionAndLogs(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	const uid int64 = 303
-	if err := userRepo.Insert("carol", uid); err != nil {
+	if err := userRepo.Insert("carol", uid, time.Now()); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 

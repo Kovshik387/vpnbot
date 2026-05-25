@@ -29,18 +29,14 @@ func calendarDaysUntilDue(paymentDate *time.Time, now time.Time) int {
 	return int(due.Sub(today).Hours() / 24)
 }
 
-func nextPaymentDateAfterConfirm(oldDue *time.Time, now time.Time) time.Time {
+func paymentDateOneMonthFrom(now time.Time) time.Time {
 	loc := now.Location()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	if oldDue == nil {
-		return today.AddDate(0, 1, 0)
-	}
-	dueDay := time.Date(oldDue.Year(), oldDue.Month(), oldDue.Day(), 0, 0, 0, 0, loc)
-	base := dueDay
-	if base.Before(today) {
-		base = today
-	}
-	return base.AddDate(0, 1, 0)
+	return today.AddDate(0, 1, 0)
+}
+
+func nextPaymentDateAfterConfirm(_ *time.Time, now time.Time) time.Time {
+	return paymentDateOneMonthFrom(now)
 }
 
 func (u *UserUsecase) ListPaidBillingUsers() ([]model.TgUserModel, error) {
