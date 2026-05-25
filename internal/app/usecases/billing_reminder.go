@@ -85,24 +85,36 @@ func (u *UserUsecase) ProcessBillingReminders(now time.Time) (dueToday []model.T
 
 		switch {
 		case d == 2 && usr.PaymentReminderStage < 1:
-			if err := u.userRepository.SetPaymentReminderStage(usr.Uid, 1); err != nil {
-				return nil, nil, err
-			}
 			outs = append(outs, BillingReminderOut{User: usr, Kind: BillingRemind2d})
 		case d == 1 && usr.PaymentReminderStage < 2:
-			if err := u.userRepository.SetPaymentReminderStage(usr.Uid, 2); err != nil {
-				return nil, nil, err
-			}
 			outs = append(outs, BillingReminderOut{User: usr, Kind: BillingRemind1d})
 		case d == 0 && usr.PaymentReminderStage < 3:
-			if err := u.userRepository.SetPaymentReminderStage(usr.Uid, 3); err != nil {
-				return nil, nil, err
-			}
 			outs = append(outs, BillingReminderOut{User: usr, Kind: BillingRemindDue})
 		}
 	}
 
 	return dueToday, outs, nil
+}
+
+func ReminderStageForKind(kind BillingReminderKind) (int, bool) {
+	switch kind {
+	case BillingRemind2d:
+		return 1, true
+	case BillingRemind1d:
+		return 2, true
+	case BillingRemindDue:
+		return 3, true
+	default:
+		return 0, false
+	}
+}
+
+func (u *UserUsecase) CommitBillingReminderStage(userID int64, kind BillingReminderKind) error {
+	stage, ok := ReminderStageForKind(kind)
+	if !ok {
+		return nil
+	}
+	return u.userRepository.SetPaymentReminderStage(userID, stage)
 }
 
 func (u *UserUsecase) CheckPaymentRevoked(userID int64) (bool, error) {

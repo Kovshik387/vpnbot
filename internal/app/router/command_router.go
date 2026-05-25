@@ -119,6 +119,14 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config, ui *U
 
 		admin.SayCommandHandler(update, bot, userUC, ui.SayLog)
 	}
+
+	baseHandlers["logs"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		if err := checkPermission(update, bot, config.AdminId); err != nil {
+			log.Println(err)
+			return
+		}
+		admin.LogsHandler(update, bot)
+	}
 	baseHandlers["poll_result"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		if err := checkPermission(update, bot, config.AdminId); err != nil {
 			log.Println(err)

@@ -17,6 +17,7 @@ func StartHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, p
 	messageID := update.Message.MessageID
 	pr.Clear(update.Message.From.ID)
 	HomePanel(update, bot, adminId, pr, userUC)
+	EnsureReplyKeyboard(bot, chatID)
 	_, _ = bot.Request(tgbotapi.NewDeleteMessage(chatID, messageID))
 }
 

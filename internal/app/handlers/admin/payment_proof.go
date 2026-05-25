@@ -24,7 +24,7 @@ func PaymentProofConfirmHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, us
 	}
 	kb := user.MainMenuKeyboard(userUC, targetUserID, canRequestKey)
 	text := "✅ Оплата подтверждена. Срок продлён на <b>1 месяц</b>."
-	user.EditPanelHTMLForUser(bot, pr, targetUserID, text, &kb, true)
+	user.SendNotificationHTMLForUser(bot, targetUserID, text, &kb, true)
 
 	_, _ = bot.Request(tgbotapi.NewDeleteMessage(adminID, update.CallbackQuery.Message.MessageID))
 }
@@ -37,7 +37,7 @@ func PaymentProofDenyHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userU
 
 	kb := user.MainMenuKeyboard(userUC, targetUserID, false)
 	text := "❌ Скриншот оплаты отклонён. При необходимости отправьте другой через «Оплата» в панели."
-	user.EditPanelHTMLForUser(bot, pr, targetUserID, text, &kb, true)
+	user.SendNotificationHTMLForUser(bot, targetUserID, text, &kb, true)
 
 	_, _ = bot.Request(tgbotapi.NewDeleteMessage(adminID, update.CallbackQuery.Message.MessageID))
 }

@@ -99,6 +99,18 @@ func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsec
 			id, _ := strconv.ParseInt(idStr, 10, 64)
 			user.SayLogDetail(update, bot, uir.SayLog, uir.Panel, id)
 		},
+		"logt:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			if err := checkCallbackPermission(update, bot, config.AdminId); err != nil {
+				return
+			}
+			admin.LogsTailCallback(update, bot)
+		},
+		"logpick:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			if err := checkCallbackPermission(update, bot, config.AdminId); err != nil {
+				return
+			}
+			admin.LogsPickLinesCallback(update, bot)
+		},
 		"info_phone": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 			uid := update.CallbackQuery.From.ID

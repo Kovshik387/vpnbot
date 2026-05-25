@@ -16,12 +16,14 @@ func NavFooterRow() []tgbotapi.InlineKeyboardButton {
 	)
 }
 
-// PanelShortcutKeyboard — компактная кнопка возврата к панели из служебных сообщений.
+// PanelShortcutKeyboard — кнопка открытия панели из рассылок и уведомлений.
 func PanelShortcutKeyboard() tgbotapi.InlineKeyboardMarkup {
-	return tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🏠 Закрыть", "panel_home"),
-		),
+	return tgbotapi.NewInlineKeyboardMarkup(panelShowRow())
+}
+
+func panelShowRow() []tgbotapi.InlineKeyboardButton {
+	return tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🏠 Показать панель", "panel_home"),
 	)
 }
 
@@ -46,15 +48,13 @@ func HomeScreenKeyboard(showRequestKey, showPaymentRow bool) tgbotapi.InlineKeyb
 	return WithNavFooter(tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows})
 }
 
-// PaymentReminderKeyboard — уведомления за 2 / 1 день и в день оплаты.
+// PaymentReminderKeyboard — push-уведомления за 2 / 1 день и в день оплаты.
 func PaymentReminderKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("💳 Оплата", "payment_flow"),
 		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✖️ Закрыть", "panel_home"),
-		),
+		panelShowRow(),
 	)
 }
 
