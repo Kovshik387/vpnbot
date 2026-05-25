@@ -38,6 +38,7 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr
 			"• <code>/count</code> — число активных\n\n" +
 			"<b>Админ: рассылки</b>\n" +
 			"• <code>/say</code> — сообщение всем (попадает в «Объявления»)\n" +
+			"• <code>/logs</code> — лог из файла (меню или <code>/logs 100</code>, <code>BOT_LOG_PATHS</code>)\n" +
 			"• <code>/poll_result &lt;id&gt;</code> — итог опроса\n" +
 			"• <code>/poll_list</code> — список опросов\n\n" +
 			"<b>Админ: сервер</b>\n" +

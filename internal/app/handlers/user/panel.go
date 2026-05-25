@@ -6,6 +6,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
+	"VpnBot/internal/app/ui"
 	"VpnBot/internal/domain/repository"
 )
 
@@ -115,4 +116,34 @@ func EditPanelHTMLForUser(bot *tgbotapi.BotAPI, pr *repository.PanelRepository, 
 		messageID = 0
 	}
 	EditPanelHTML(bot, pr, userID, chatID, messageID, text, markup, disableWebPreview)
+}
+
+// SendNotificationHTML шлёт отдельное сообщение с push (не трогает панель в ui_panel).
+func SendNotificationHTML(bot *tgbotapi.BotAPI, chatID int64, text string, markup *tgbotapi.InlineKeyboardMarkup, disableWebPreview bool) bool {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = tgbotapi.ModeHTML
+	msg.DisableNotification = false
+	msg.ReplyMarkup = markup
+	msg.DisableWebPagePreview = disableWebPreview
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println("send notification:", err)
+		return false
+	}
+	return true
+}
+
+// SendNotificationHTMLForUser — уведомление в личный чат по Telegram user id.
+func SendNotificationHTMLForUser(bot *tgbotapi.BotAPI, userID int64, text string, markup *tgbotapi.InlineKeyboardMarkup, disableWebPreview bool) bool {
+	return SendNotificationHTML(bot, userID, text, markup, disableWebPreview)
+}
+
+// EnsureReplyKeyboard показывает постоянные кнопки «Проверить подписку» и «Показать панель».
+func EnsureReplyKeyboard(bot *tgbotapi.BotAPI, chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, "⌨️ Быстрые кнопки внизу экрана обновлены.")
+	msg.ReplyMarkup = ui.MainKeyboard()
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println("reply keyboard:", err)
+	}
 }

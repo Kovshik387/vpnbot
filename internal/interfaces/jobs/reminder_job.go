@@ -88,7 +88,11 @@ func (job *ReminderJob) Start() {
 			} else {
 				kb = ui.PaymentReminderKeyboard()
 			}
-			user.EditPanelHTMLForUser(job.tg, job.panel, u.Uid, text, &kb, true)
+			if user.SendNotificationHTMLForUser(job.tg, u.Uid, text, &kb, true) {
+				if err := job.userUC.CommitBillingReminderStage(u.Uid, out.Kind); err != nil {
+					log.Printf("reminder stage uid=%d: %v", u.Uid, err)
+				}
+			}
 		}
 
 	})

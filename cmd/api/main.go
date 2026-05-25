@@ -129,6 +129,8 @@ func main() {
 				if handler, ok := commandRouter["subscribe"]; ok {
 					handler(update, bot)
 				}
+			case ui.BtnShowPanel:
+				user.HomePanel(update, bot, cfg.AdminId, panelRepo, userUC)
 			case "./start":
 				if handler, ok := commandRouter["start"]; ok {
 					handler(update, bot)
@@ -202,7 +204,7 @@ func paymentRevokedBlocksPlainText(uc *usecases.UserUsecase, m *tgbotapi.Message
 	if err != nil || !revoked {
 		return false
 	}
-	if m.Text == "./start" {
+	if m.Text == "./start" || m.Text == ui.BtnShowPanel || m.Text == ui.BtnCheckSubscription {
 		return false
 	}
 	return true
@@ -231,7 +233,7 @@ func sendPaymentRevokedNotice(bot *tgbotapi.BotAPI, panelRepo *repository.PanelR
 	text := "⏸️ <b>Доступ приостановлен</b> из-за просроченной оплаты.\n\n" +
 		"Нажмите «Оплата» и отправьте скриншот перевода — после проверки срок продлят на месяц."
 	kb := ui.PaymentRevokedKeyboard()
-	user.EditPanelHTMLForUser(bot, panelRepo, userID, text, &kb, true)
+	user.SendNotificationHTMLForUser(bot, userID, text, &kb, true)
 }
 
 func blockUser(update tgbotapi.Update, bot *tgbotapi.BotAPI, isCommand bool) {

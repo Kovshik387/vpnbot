@@ -90,6 +90,9 @@ func TestProcessBillingReminders_Stages(t *testing.T) {
 	if len(outs) != 1 || outs[0].Kind != BillingRemind2d {
 		t.Fatalf("expected one BillingRemind2d, got %+v", outs)
 	}
+	if err := uc.CommitBillingReminderStage(uid, BillingRemind2d); err != nil {
+		t.Fatalf("commit stage d-2: %v", err)
+	}
 
 	_, outs, err = uc.ProcessBillingReminders(base)
 	if err != nil {
@@ -106,6 +109,9 @@ func TestProcessBillingReminders_Stages(t *testing.T) {
 	if len(outs) != 1 || outs[0].Kind != BillingRemind1d {
 		t.Fatalf("expected one BillingRemind1d, got %+v", outs)
 	}
+	if err := uc.CommitBillingReminderStage(uid, BillingRemind1d); err != nil {
+		t.Fatalf("commit stage d-1: %v", err)
+	}
 
 	dueToday, outs, err = uc.ProcessBillingReminders(base.AddDate(0, 0, 2))
 	if err != nil {
@@ -116,6 +122,9 @@ func TestProcessBillingReminders_Stages(t *testing.T) {
 	}
 	if len(outs) != 1 || outs[0].Kind != BillingRemindDue {
 		t.Fatalf("expected one BillingRemindDue, got %+v", outs)
+	}
+	if err := uc.CommitBillingReminderStage(uid, BillingRemindDue); err != nil {
+		t.Fatalf("commit stage due: %v", err)
 	}
 }
 

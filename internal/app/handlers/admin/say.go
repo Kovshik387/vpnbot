@@ -40,7 +40,6 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 			makeMsg = func(chatID int64) tgbotapi.Chattable {
 				photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileID(last.FileID))
 				photo.Caption = src.Caption
-				photo.DisableNotification = true
 				kb := ui.PanelShortcutKeyboard()
 				photo.ReplyMarkup = kb
 				return photo
@@ -59,7 +58,6 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 				p := tgbotapi.NewPoll(chatID, poll.Question, options...)
 				p.IsAnonymous = poll.IsAnonymous
 				p.AllowsMultipleAnswers = poll.AllowsMultipleAnswers
-				p.DisableNotification = true
 				return p
 			}
 
@@ -70,7 +68,6 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 
 			makeMsg = func(chatID int64) tgbotapi.Chattable {
 				m := tgbotapi.NewMessage(chatID, text)
-				m.DisableNotification = true
 				kb := ui.PanelShortcutKeyboard()
 				m.ReplyMarkup = kb
 				return m
