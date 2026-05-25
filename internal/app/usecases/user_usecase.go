@@ -90,7 +90,7 @@ func (u *UserUsecase) DeleteUser(username string) error {
 }
 
 func (u *UserUsecase) Insert(username string, uid int64) error {
-	return u.userRepository.Insert(username, uid)
+	return u.userRepository.Insert(username, uid, paymentDateOneMonthFrom(time.Now()))
 }
 
 func (u *UserUsecase) Block(uid int64, block bool) error {
