@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"VpnBot/internal/domain/model"
+	"log"
 	"time"
 )
 
@@ -64,7 +65,8 @@ func (u *UserUsecase) ProcessBillingReminders(now time.Time) (dueToday []model.T
 				}
 				if username != "" {
 					if err := u.marzbanClient.SetUserStatus(username, "disabled"); err != nil {
-						return nil, nil, err
+						// Один пользователь без учётки в Marzban не должен блокировать напоминания остальным.
+						log.Printf("marzban disable %q uid=%d: %v", username, usr.Uid, err)
 					}
 				}
 				if err := u.userRepository.SetPaymentAccessRevoked(usr.Uid, true); err != nil {

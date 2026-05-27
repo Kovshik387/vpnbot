@@ -4,6 +4,7 @@ import (
 	"VpnBot/internal/domain/model"
 	"VpnBot/internal/domain/repository"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 type fakeMarzban struct {
 	statusByUser map[string]string
+	setStatusErr error
 }
 
 func newFakeMarzban() *fakeMarzban {
@@ -30,6 +32,9 @@ func (f *fakeMarzban) AddUser(username string) (model.User, error) {
 }
 func (f *fakeMarzban) Delete(username string) error { return nil }
 func (f *fakeMarzban) SetUserStatus(username string, status string) error {
+	if f.setStatusErr != nil {
+		return f.setStatusErr
+	}
 	f.statusByUser[username] = status
 	return nil
 }
@@ -160,6 +165,60 @@ func TestProcessBillingReminders_OverdueDisablesSubscription(t *testing.T) {
 
 	if got := marz.statusByUser["bob"]; got != "disabled" {
 		t.Fatalf("expected Marzban status disabled for bob, got %q", got)
+	}
+}
+
+func TestProcessBillingReminders_MarzbanMissingDoesNotBlockOthers(t *testing.T) {
+	uc, userRepo, _, marz, db := setupBillingUsecase(t)
+	defer func() { _ = db.Close() }()
+
+	marz.setStatusErr = errors.New(`{"detail":"User not found"}`)
+
+	const overdueUID int64 = 401
+	const remindUID int64 = 402
+	if err := userRepo.Insert("orphan", overdueUID, time.Now()); err != nil {
+		t.Fatalf("insert orphan: %v", err)
+	}
+	if err := userRepo.Insert("payer", remindUID, time.Now()); err != nil {
+		t.Fatalf("insert payer: %v", err)
+	}
+
+	now := time.Date(2026, 4, 10, 18, 0, 0, 0, time.UTC)
+	if err := userRepo.UpdatePaymentDate("orphan", now.AddDate(0, 0, -2)); err != nil {
+		t.Fatalf("set orphan overdue: %v", err)
+	}
+	if err := userRepo.UpdatePaymentDate("payer", now.AddDate(0, 0, 2)); err != nil {
+		t.Fatalf("set payer due in 2 days: %v", err)
+	}
+
+	_, outs, err := uc.ProcessBillingReminders(now)
+	if err != nil {
+		t.Fatalf("process reminders: %v", err)
+	}
+
+	var revoked, remind2d bool
+	for _, o := range outs {
+		switch o.Kind {
+		case BillingNewlyRevoked:
+			if o.User.Uid == overdueUID {
+				revoked = true
+			}
+		case BillingRemind2d:
+			if o.User.Uid == remindUID {
+				remind2d = true
+			}
+		}
+	}
+	if !revoked {
+		t.Fatalf("expected revoked notice for overdue user, got %+v", outs)
+	}
+	if !remind2d {
+		t.Fatalf("expected 2d reminder for payer, got %+v", outs)
+	}
+
+	ok, err := userRepo.CheckPaymentRevoked(overdueUID)
+	if err != nil || !ok {
+		t.Fatalf("expected orphan revoked in DB, revoked=%v err=%v", ok, err)
 	}
 }
 

@@ -138,15 +138,13 @@ func SendNotificationHTMLForUser(bot *tgbotapi.BotAPI, userID int64, text string
 	return SendNotificationHTML(bot, userID, text, markup, disableWebPreview)
 }
 
-// EnsureReplyKeyboard включает постоянные кнопки внизу без отдельного текста в чате.
+// EnsureReplyKeyboard включает постоянные кнопки внизу (Telegram требует непустой text).
 func EnsureReplyKeyboard(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "\u200b")
+	msg := tgbotapi.NewMessage(chatID, ".")
 	msg.ReplyMarkup = ui.MainKeyboard()
 	msg.DisableNotification = true
-	sent, err := bot.Send(msg)
+	_, err := bot.Send(msg)
 	if err != nil {
 		log.Println("reply keyboard:", err)
-		return
 	}
-	_, _ = bot.Request(tgbotapi.NewDeleteMessage(chatID, sent.MessageID))
 }
