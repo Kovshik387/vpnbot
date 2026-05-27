@@ -140,7 +140,7 @@ func SendNotificationHTMLForUser(bot *tgbotapi.BotAPI, userID int64, text string
 
 // EnsureReplyKeyboard включает постоянные кнопки внизу (Telegram требует непустой text).
 func EnsureReplyKeyboard(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, ".")
+	msg := tgbotapi.NewMessage(chatID, "\u200b")
 	msg.ReplyMarkup = ui.MainKeyboard()
 	msg.DisableNotification = true
 	_, err := bot.Send(msg)
