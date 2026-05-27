@@ -40,6 +40,10 @@ func (job *ReminderJob) Start() {
 
 		job.sendAdminReport(dueToday)
 
+		if len(outs) > 0 {
+			log.Printf("billing reminders: %d to send", len(outs))
+		}
+
 		for _, out := range outs {
 			u := out.User
 			var text string
@@ -88,10 +92,14 @@ func (job *ReminderJob) Start() {
 			} else {
 				kb = ui.PaymentReminderKeyboard()
 			}
+			kind := billingReminderKindLabel(out.Kind)
 			if user.SendNotificationHTMLForUser(job.tg, u.Uid, text, &kb, true) {
+				log.Printf("billing reminder sent uid=%d username=%q kind=%s", u.Uid, u.Username, kind)
 				if err := job.userUC.CommitBillingReminderStage(u.Uid, out.Kind); err != nil {
-					log.Printf("reminder stage uid=%d: %v", u.Uid, err)
+					log.Printf("billing reminder stage save failed uid=%d username=%q kind=%s: %v", u.Uid, u.Username, kind, err)
 				}
+			} else {
+				log.Printf("billing reminder failed uid=%d username=%q kind=%s (see send notification above)", u.Uid, u.Username, kind)
 			}
 		}
 
@@ -154,4 +162,19 @@ func formatDueDate(t *time.Time) string {
 		return "—"
 	}
 	return t.Format("02.01.2006")
+}
+
+func billingReminderKindLabel(kind usecases.BillingReminderKind) string {
+	switch kind {
+	case usecases.BillingRemind2d:
+		return "2d"
+	case usecases.BillingRemind1d:
+		return "1d"
+	case usecases.BillingRemindDue:
+		return "due"
+	case usecases.BillingNewlyRevoked:
+		return "revoked"
+	default:
+		return "unknown"
+	}
 }
