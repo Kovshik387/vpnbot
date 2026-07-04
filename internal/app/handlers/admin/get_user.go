@@ -1,10 +1,12 @@
 package admin
 
 import (
+	"fmt"
+	"log"
+
 	"VpnBot/internal/app/usecases"
 	interfaces "VpnBot/internal/interfaces/http"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"log"
 )
 
 func SearchUserHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase, name string) {
@@ -31,6 +33,9 @@ func SearchUserHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 	response, _, err := mb.SendUserInfo(user, price)
 	if err != nil {
 		log.Println("Ошибка при формировании сообщения")
+	}
+	if paidUntil, err := userUC.GetPaymentDateByUsername(user.Username); err == nil && paidUntil != nil {
+		response += fmt.Sprintf("\n<b>Оплачен до</b> %s", paidUntil.Format("02.01.2006"))
 	}
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)

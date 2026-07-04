@@ -133,6 +133,10 @@ func (u *UserUsecase) GetPaymentDateByUserID(uid int64) (*time.Time, error) {
 	return u.userRepository.GetPaymentDateByUserID(uid)
 }
 
+func (u *UserUsecase) GetPaymentDateByUsername(username string) (*time.Time, error) {
+	return u.userRepository.GetPaymentDateByUsername(username)
+}
+
 func (u *UserUsecase) ListBlocked() ([]model.TgUserModel, error) {
 	return u.userRepository.GetBlocked()
 }

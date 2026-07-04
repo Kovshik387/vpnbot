@@ -549,6 +549,25 @@ func (r *UserRepository) GetPaymentDateByUserID(userID int64) (*time.Time, error
 	return &t.Time, nil
 }
 
+func (r *UserRepository) GetPaymentDateByUsername(username string) (*time.Time, error) {
+	row := r.db.QueryRow(`
+   select us.payment_date as payment_date
+     from users us
+    where us.username = ?`, username)
+	var t sql.NullTime
+	err := row.Scan(&t)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !t.Valid {
+		return nil, nil
+	}
+	return &t.Time, nil
+}
+
 // NormalizePaymentDatesToCurrentMonth приводит payment_date к текущему году/месяцу,
 // сохраняя день месяца (и безопасно ограничивая его длиной месяца).
 func (r *UserRepository) NormalizePaymentDatesToCurrentMonth(now time.Time) (int64, error) {
