@@ -148,11 +148,17 @@ func validateProxyEndpoint(parsed *url.URL) error {
 	if parsed.Path != "" || parsed.RawPath != "" || parsed.RawQuery != "" || parsed.ForceQuery {
 		return fmt.Errorf("адрес прокси должен иметь формат схема://[логин:пароль@]сервер:порт без пути и параметров")
 	}
-	if !validProxyHost(parsed.Hostname()) || !validProxyPort(parsed.Port()) {
+	host := parsed.Hostname()
+	// Older net/url versions accept arbitrary text in brackets. Brackets are
+	// reserved for IPv6 literals, so validate their content ourselves.
+	if strings.HasPrefix(parsed.Host, "[") && (!strings.Contains(host, ":") || net.ParseIP(host) == nil) {
+		return fmt.Errorf("в квадратных скобках должен быть корректный IPv6-адрес")
+	}
+	if !validProxyHost(host) || !validProxyPort(parsed.Port()) {
 		return fmt.Errorf("укажите корректный сервер и явный порт от 1 до 65535")
 	}
 	// A colon in the host must belong to a bracketed IPv6 literal.
-	if strings.Contains(parsed.Hostname(), ":") && !strings.HasPrefix(parsed.Host, "[") {
+	if strings.Contains(host, ":") && !strings.HasPrefix(parsed.Host, "[") {
 		return fmt.Errorf("IPv6-адрес в ссылке должен быть заключён в квадратные скобки")
 	}
 	if parsed.User != nil {
