@@ -7,16 +7,19 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
 type marzbanClient struct {
+	tokenMu   sync.Mutex
 	baseUrl   string
 	username  string
 	password  string
@@ -30,7 +33,7 @@ const contentType = "application/x-www-form-urlencoded"
 
 func NewMarzbanClient(baseUrl string, username string, password string) service.MarzbanService {
 	return &marzbanClient{
-		baseUrl:  baseUrl,
+		baseUrl:  strings.TrimRight(baseUrl, "/"),
 		username: username,
 		password: password,
 		client:   &http.Client{Timeout: 10 * time.Second},
@@ -38,7 +41,8 @@ func NewMarzbanClient(baseUrl string, username string, password string) service.
 }
 
 func (m *marzbanClient) SetUserStatus(username string, status string) error {
-	if err := m.ensureToken(); err != nil {
+	authorization, err := m.authorizationHeader()
+	if err != nil {
 		return err
 	}
 
@@ -49,11 +53,11 @@ func (m *marzbanClient) SetUserStatus(username string, status string) error {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, m.baseUrl+"/api/user/"+username, bytes.NewBuffer(bodyStr))
+	req, err := http.NewRequest(http.MethodPut, m.baseUrl+"/api/user/"+url.PathEscape(username), bytes.NewBuffer(bodyStr))
 	if err != nil {
 		return err
 	}
-	req.Header.Add("Authorization", m.tokenType+" "+m.token)
+	req.Header.Add("Authorization", authorization)
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := m.client.Do(req)
@@ -66,6 +70,9 @@ func (m *marzbanClient) SetUserStatus(username string, status string) error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusNotFound {
+			return fmt.Errorf("%w: %s", service.ErrUserNotFound, body)
+		}
 		return errors.New(string(body))
 	}
 
@@ -73,20 +80,22 @@ func (m *marzbanClient) SetUserStatus(username string, status string) error {
 }
 
 func (m *marzbanClient) Delete(username string) error {
-	if err := m.ensureToken(); err != nil {
-		return err
-	}
-	log.Println("Deleting user", username)
-	req, err := http.NewRequest(http.MethodDelete, m.baseUrl+"/api/user/"+username, nil)
+	authorization, err := m.authorizationHeader()
 	if err != nil {
 		return err
 	}
-	req.Header.Add("Authorization", m.tokenType+" "+m.token)
+	log.Println("Deleting user", username)
+	req, err := http.NewRequest(http.MethodDelete, m.baseUrl+"/api/user/"+url.PathEscape(username), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", authorization)
 
 	resp, err := m.client.Do(req)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -97,7 +106,8 @@ func (m *marzbanClient) Delete(username string) error {
 }
 
 func (m *marzbanClient) AddUser(username string) (model.User, error) {
-	if err := m.ensureToken(); err != nil {
+	authorization, err := m.authorizationHeader()
+	if err != nil {
 		return model.User{}, err
 	}
 
@@ -133,7 +143,8 @@ func (m *marzbanClient) AddUser(username string) (model.User, error) {
 		return model.User{}, err
 	}
 
-	req.Header.Add("Authorization", m.tokenType+" "+m.token)
+	req.Header.Add("Authorization", authorization)
+	req.Header.Add("Content-Type", "application/json")
 	resp, err := m.client.Do(req)
 	if err != nil {
 		return model.User{}, err
@@ -160,16 +171,17 @@ func (m *marzbanClient) AddUser(username string) (model.User, error) {
 }
 
 func (m *marzbanClient) GetUser(username string) (model.User, error) {
-	if err := m.ensureToken(); err != nil {
-		return model.User{}, err
-	}
-
-	req, err := http.NewRequest("GET", m.baseUrl+"/api/user/"+username, nil)
+	authorization, err := m.authorizationHeader()
 	if err != nil {
 		return model.User{}, err
 	}
 
-	req.Header.Add("Authorization", m.tokenType+" "+m.token)
+	req, err := http.NewRequest("GET", m.baseUrl+"/api/user/"+url.PathEscape(username), nil)
+	if err != nil {
+		return model.User{}, err
+	}
+
+	req.Header.Add("Authorization", authorization)
 	resp, err := m.client.Do(req)
 	if err != nil {
 		return model.User{}, err
@@ -194,14 +206,24 @@ func (m *marzbanClient) GetUser(username string) (model.User, error) {
 	return usersResponse, nil
 }
 
-func (m *marzbanClient) ensureToken() error {
+func (m *marzbanClient) authorizationHeader() (string, error) {
+	m.tokenMu.Lock()
+	defer m.tokenMu.Unlock()
 	if m.token == "" || time.Now().After(m.expires) {
-		return m.Login()
+		if err := m.login(); err != nil {
+			return "", err
+		}
 	}
-	return nil
+	return m.tokenType + " " + m.token, nil
 }
 
 func (m *marzbanClient) Login() error {
+	m.tokenMu.Lock()
+	defer m.tokenMu.Unlock()
+	return m.login()
+}
+
+func (m *marzbanClient) login() error {
 	const grantType = "password"
 
 	form := url.Values{}
@@ -220,7 +242,7 @@ func (m *marzbanClient) Login() error {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			log.Fatal(err)
+			log.Println("marzban login response close:", err)
 		}
 	}(resp.Body)
 
@@ -235,12 +257,9 @@ func (m *marzbanClient) Login() error {
 		return err
 	}
 
-	m.token = accessModel.AccessToken
-	m.tokenType = accessModel.TokenType
-
 	parser := jwt.NewParser()
 	claims := jwt.MapClaims{}
-	_, _, err = parser.ParseUnverified(m.token, claims)
+	_, _, err = parser.ParseUnverified(accessModel.AccessToken, claims)
 	if err != nil {
 		return err
 	}
@@ -249,11 +268,14 @@ func (m *marzbanClient) Login() error {
 	} else {
 		return errors.New("время жизни токена не найдено")
 	}
+	m.token = accessModel.AccessToken
+	m.tokenType = accessModel.TokenType
 
 	return nil
 }
 func (m *marzbanClient) GetUsers() (model.UsersResponse, error) {
-	if err := m.ensureToken(); err != nil {
+	authorization, err := m.authorizationHeader()
+	if err != nil {
 		return model.UsersResponse{}, err
 	}
 
@@ -262,7 +284,7 @@ func (m *marzbanClient) GetUsers() (model.UsersResponse, error) {
 		return model.UsersResponse{}, err
 	}
 
-	req.Header.Add("Authorization", m.tokenType+" "+m.token)
+	req.Header.Add("Authorization", authorization)
 	resp, err := m.client.Do(req)
 	if err != nil {
 		return model.UsersResponse{}, err

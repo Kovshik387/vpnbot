@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"errors"
 	"log"
 
 	"VpnBot/internal/app/handlers/user"
@@ -11,7 +12,11 @@ import (
 )
 
 func PaymentProofConfirmHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *usecases.UserUsecase, adminID int64, targetUserID int64, pr *repository.PanelRepository) {
-	if err := userUC.ConfirmExtensionAfterPayment(targetUserID); err != nil {
+	if err := userUC.ConfirmExtensionAfterPayment(targetUserID, update.CallbackQuery.Message.MessageID); err != nil {
+		if errors.Is(err, usecases.ErrPaymentAlreadyConfirmed) {
+			_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Уже подтверждено"))
+			return
+		}
 		log.Println("payment confirm:", err)
 		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Ошибка"))
 		return

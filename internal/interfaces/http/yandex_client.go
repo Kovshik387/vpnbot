@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"time"
 )
 
 type yandexClient struct {
+	client  *http.Client
+	baseURL string
 }
 
 type yandexResponse struct {
@@ -16,13 +20,15 @@ type yandexResponse struct {
 }
 
 func NewYandexClient() service.YandexService {
-	return &yandexClient{}
+	return &yandexClient{client: &http.Client{Timeout: 10 * time.Second}, baseURL: "https://cloud-api.yandex.net/v1/disk/public/resources"}
 }
 
 func (y yandexClient) GetYandexDirectLink(publicLink string) (string, error) {
-	apiURL := fmt.Sprintf("https://cloud-api.yandex.net/v1/disk/public/resources?public_key=%s", publicLink)
+	query := url.Values{}
+	query.Set("public_key", publicLink)
+	apiURL := y.baseURL + "?" + query.Encode()
 
-	resp, err := http.Get(apiURL)
+	resp, err := y.client.Get(apiURL)
 	if err != nil {
 		return "", fmt.Errorf("ошибка запроса к API Яндекса: %w", err)
 	}

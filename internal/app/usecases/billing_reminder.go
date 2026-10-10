@@ -2,9 +2,13 @@ package usecases
 
 import (
 	"VpnBot/internal/domain/model"
-	"log"
+	"VpnBot/internal/domain/ports/service"
+	"errors"
+	"fmt"
 	"time"
 )
+
+var ErrPaymentAlreadyConfirmed = errors.New("оплата уже подтверждена")
 
 type BillingReminderKind int
 
@@ -24,20 +28,57 @@ func calendarDaysUntilDue(paymentDate *time.Time, now time.Time) int {
 	if paymentDate == nil {
 		return 99999
 	}
-	loc := now.Location()
-	due := time.Date(paymentDate.Year(), paymentDate.Month(), paymentDate.Day(), 0, 0, 0, 0, loc)
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	due := time.Date(paymentDate.Year(), paymentDate.Month(), paymentDate.Day(), 0, 0, 0, 0, time.UTC)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	return int(due.Sub(today).Hours() / 24)
 }
 
 func paymentDateOneMonthFrom(now time.Time) time.Time {
 	loc := now.Location()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	return today.AddDate(0, 1, 0)
+	nextMonth := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, loc)
+	lastDay := time.Date(nextMonth.Year(), nextMonth.Month()+1, 0, 0, 0, 0, 0, loc).Day()
+	day := now.Day()
+	if day > lastDay {
+		day = lastDay
+	}
+	return time.Date(nextMonth.Year(), nextMonth.Month(), day, 0, 0, 0, 0, loc)
 }
 
-func nextPaymentDateAfterConfirm(_ *time.Time, now time.Time) time.Time {
-	return paymentDateOneMonthFrom(now)
+func nextPaymentDateAfterConfirm(oldDate *time.Time, now time.Time) time.Time {
+	base := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if oldDate != nil {
+		old := time.Date(oldDate.Year(), oldDate.Month(), oldDate.Day(), 0, 0, 0, 0, now.Location())
+		if old.After(base) {
+			base = old
+		}
+	}
+	return paymentDateOneMonthFrom(base)
+}
+
+// restorePaymentAccess оставляет revoked=true при сбое, чтобы плановая проверка
+// могла повторить активацию после административного изменения даты или тарифа.
+func (u *UserUsecase) restorePaymentAccess(now time.Time, onlyUsername string) error {
+	users, err := u.userRepository.ListUsersForBilling()
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, usr := range users {
+		if !usr.PaymentAccessRevoked || (onlyUsername != "" && usr.Username != onlyUsername) {
+			continue
+		}
+		if !usr.IsFree && (usr.PaymentDate == nil || calendarDaysUntilDue(usr.PaymentDate, now) < 0) {
+			continue
+		}
+		if err := u.marzbanClient.SetUserStatus(usr.Username, "active"); err != nil {
+			failures = append(failures, fmt.Errorf("срок/тариф сохранён, но доступ %s пока не восстановлен: %w", usr.Username, err))
+			continue
+		}
+		if err := u.userRepository.SetPaymentAccessRevoked(usr.Uid, false); err != nil {
+			failures = append(failures, err)
+		}
+	}
+	return errors.Join(failures...)
 }
 
 func (u *UserUsecase) ListPaidBillingUsers() ([]model.TgUserModel, error) {
@@ -45,6 +86,11 @@ func (u *UserUsecase) ListPaidBillingUsers() ([]model.TgUserModel, error) {
 }
 
 func (u *UserUsecase) ProcessBillingReminders(now time.Time) (dueToday []model.TgUserModel, outs []BillingReminderOut, err error) {
+	u.billingMu.Lock()
+	defer u.billingMu.Unlock()
+
+	restoreErr := u.restorePaymentAccess(now, "")
+	failures := []error{restoreErr}
 	users, err := u.userRepository.ListPaidUsersForBilling()
 	if err != nil {
 		return nil, nil, err
@@ -65,13 +111,18 @@ func (u *UserUsecase) ProcessBillingReminders(now time.Time) (dueToday []model.T
 				}
 				if username != "" {
 					if err := u.marzbanClient.SetUserStatus(username, "disabled"); err != nil {
-						// Один пользователь без учётки в Marzban не должен блокировать напоминания остальным.
-						log.Printf("marzban disable %q uid=%d: %v", username, usr.Uid, err)
+						// Отсутствующая учётка уже не предоставляет VPN; временный сбой повторим при следующей проверке.
+						if !errors.Is(err, service.ErrUserNotFound) {
+							failures = append(failures, fmt.Errorf("отключение %s отложено: %w", username, err))
+							continue
+						}
 					}
 				}
 				if err := u.userRepository.SetPaymentAccessRevoked(usr.Uid, true); err != nil {
 					return nil, nil, err
 				}
+			}
+			if usr.PaymentReminderStage < 4 {
 				outs = append(outs, BillingReminderOut{User: usr, Kind: BillingNewlyRevoked})
 			}
 			continue
@@ -91,7 +142,7 @@ func (u *UserUsecase) ProcessBillingReminders(now time.Time) (dueToday []model.T
 		}
 	}
 
-	return dueToday, outs, nil
+	return dueToday, outs, errors.Join(failures...)
 }
 
 func ReminderStageForKind(kind BillingReminderKind) (int, bool) {
@@ -102,17 +153,19 @@ func ReminderStageForKind(kind BillingReminderKind) (int, bool) {
 		return 2, true
 	case BillingRemindDue:
 		return 3, true
+	case BillingNewlyRevoked:
+		return 4, true
 	default:
 		return 0, false
 	}
 }
 
-func (u *UserUsecase) CommitBillingReminderStage(userID int64, kind BillingReminderKind) error {
+func (u *UserUsecase) CommitBillingReminderStage(userID int64, kind BillingReminderKind, expectedPaymentDates ...*time.Time) error {
 	stage, ok := ReminderStageForKind(kind)
 	if !ok {
 		return nil
 	}
-	return u.userRepository.SetPaymentReminderStage(userID, stage)
+	return u.userRepository.SetPaymentReminderStage(userID, stage, expectedPaymentDates...)
 }
 
 func (u *UserUsecase) CheckPaymentRevoked(userID int64) (bool, error) {
@@ -131,27 +184,50 @@ func (u *UserUsecase) GetAwaitingPaymentScreenshot(userID int64) (bool, error) {
 	return u.userRepository.GetAwaitingPaymentScreenshot(userID)
 }
 
-func (u *UserUsecase) ConfirmExtensionAfterPayment(userID int64) error {
-	old, err := u.userRepository.GetPaymentDateByUserID(userID)
-	if err != nil {
-		return err
-	}
-	next := nextPaymentDateAfterConfirm(old, time.Now())
-	if err := u.userRepository.ApplyConfirmedPaymentExtension(userID, next); err != nil {
-		return err
-	}
+func (u *UserUsecase) ConfirmExtensionAfterPayment(userID int64, proofMessageIDs ...int) error {
+	u.billingMu.Lock()
+	defer u.billingMu.Unlock()
 
+	proofMessageID := 0
+	if len(proofMessageIDs) > 0 {
+		proofMessageID = proofMessageIDs[0]
+	}
+	if proofMessageID > 0 && u.paymentReportRepo != nil {
+		confirmed, err := u.paymentReportRepo.HasConfirmedProof(userID, proofMessageID)
+		if err != nil {
+			return err
+		}
+		if confirmed {
+			return ErrPaymentAlreadyConfirmed
+		}
+	}
 	username, err := u.userRepository.GetUsernameByUserID(userID)
 	if err != nil {
 		return err
 	}
 	if username == "" {
-		return nil
+		return fmt.Errorf("пользователь %d не найден", userID)
+	}
+	old, err := u.userRepository.GetPaymentDateByUserID(userID)
+	if err != nil {
+		return err
 	}
 	if err := u.marzbanClient.SetUserStatus(username, "active"); err != nil {
 		return err
 	}
-	return u.LogConfirmedPayment(userID)
+	// Пока Marzban не подтвердил активацию, дата и флаги оплаты остаются прежними.
+	next := nextPaymentDateAfterConfirm(old, time.Now())
+	if u.paymentReportRepo == nil {
+		return u.userRepository.ApplyConfirmedPaymentExtension(userID, next)
+	}
+	confirmed, err := u.paymentReportRepo.ApplyConfirmedExtension(userID, next, proofMessageID)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return ErrPaymentAlreadyConfirmed
+	}
+	return nil
 }
 
 func (u *UserUsecase) RejectPaymentProof(userID int64) error {

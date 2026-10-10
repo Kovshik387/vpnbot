@@ -6,10 +6,12 @@ import (
 	"VpnBot/internal/domain/repository"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
 type UserUsecase struct {
+	billingMu         sync.Mutex
 	marzbanClient     service.MarzbanService
 	yandexClient      service.YandexService
 	userRepository    *repository.UserRepository
@@ -102,11 +104,21 @@ func (u *UserUsecase) UpdatePrice(username string, price float64) error {
 }
 
 func (u *UserUsecase) UpdateTypePayment(username string, isFree bool) error {
-	return u.userRepository.UpdateTypePayment(username, isFree)
+	u.billingMu.Lock()
+	defer u.billingMu.Unlock()
+	if err := u.userRepository.UpdateTypePayment(username, isFree); err != nil {
+		return err
+	}
+	return u.restorePaymentAccess(time.Now(), username)
 }
 
 func (u *UserUsecase) UpdatePaymentDate(username string, date time.Time) error {
-	return u.userRepository.UpdatePaymentDate(username, date)
+	u.billingMu.Lock()
+	defer u.billingMu.Unlock()
+	if err := u.userRepository.UpdatePaymentDate(username, date); err != nil {
+		return err
+	}
+	return u.restorePaymentAccess(time.Now(), username)
 }
 
 func (u *UserUsecase) CheckBlock(uid int64) (bool, error) {
@@ -150,7 +162,12 @@ func (u *UserUsecase) ListPayment() ([]model.TgUserModel, error) {
 }
 
 func (u *UserUsecase) OverrideDate(date time.Time, dateOverride time.Time) error {
-	return u.userRepository.OverrideDate(date, dateOverride)
+	u.billingMu.Lock()
+	defer u.billingMu.Unlock()
+	if err := u.userRepository.OverrideDate(date, dateOverride); err != nil {
+		return err
+	}
+	return u.restorePaymentAccess(time.Now(), "")
 }
 
 func (u *UserUsecase) Skebob(url string) (string, error) {
@@ -158,9 +175,23 @@ func (u *UserUsecase) Skebob(url string) (string, error) {
 }
 
 func (u *UserUsecase) AddCompensationDays(daysCount int) error {
-	return u.userRepository.AddCompensationDays(daysCount)
+	if daysCount <= 0 {
+		return fmt.Errorf("число дней компенсации должно быть положительным")
+	}
+	u.billingMu.Lock()
+	defer u.billingMu.Unlock()
+	if err := u.userRepository.AddCompensationDays(daysCount); err != nil {
+		return err
+	}
+	return u.restorePaymentAccess(time.Now(), "")
 }
 
 func (u *UserUsecase) NormalizePaymentDatesToCurrentMonth(now time.Time) (int64, error) {
-	return u.userRepository.NormalizePaymentDatesToCurrentMonth(now)
+	u.billingMu.Lock()
+	defer u.billingMu.Unlock()
+	affected, err := u.userRepository.NormalizePaymentDatesToCurrentMonth(now)
+	if err != nil {
+		return affected, err
+	}
+	return affected, u.restorePaymentAccess(now, "")
 }

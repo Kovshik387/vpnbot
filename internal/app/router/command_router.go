@@ -33,6 +33,23 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config, ui *U
 	baseHandlers["info"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		user.InfoHandler(update, bot, ui.Panel)
 	}
+	baseHandlers["proxies"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		user.ProxyPageHandler(update, bot, ui.Proxy, ui.Panel, 0)
+	}
+	proxyAdminHandlers := map[string]func(tgbotapi.Update, *tgbotapi.BotAPI, *usecases.ProxyUsecase){
+		"addproxy":    admin.ProxyAddHandler,
+		"editproxy":   admin.ProxyEditHandler,
+		"deleteproxy": admin.ProxyDeleteHandler,
+		"proxylist":   admin.ProxyListHandler,
+	}
+	for command, handler := range proxyAdminHandlers {
+		baseHandlers[command] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			if err := checkPermission(update, bot, config.AdminId); err != nil {
+				return
+			}
+			handler(update, bot, ui.Proxy)
+		}
+	}
 
 	baseHandlers["adduser"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		err := checkPermission(update, bot, config.AdminId)
@@ -317,7 +334,10 @@ func checkArgs(update tgbotapi.Update, bot *tgbotapi.BotAPI, str string) (string
 }
 
 func checkPermission(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) error {
-	if update.Message.From.ID != adminId {
+	if update.Message == nil || update.Message.From == nil || update.Message.Chat == nil {
+		return errors.New("нет отправителя команды")
+	}
+	if update.Message.From.ID != adminId || !update.Message.Chat.IsPrivate() {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID,
 			"🔒 Эта команда только для администратора.")
 		_, _ = bot.Send(msg)

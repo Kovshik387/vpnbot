@@ -13,14 +13,9 @@ func StartHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, p
 		return
 	}
 
-	uid := update.Message.From.ID
 	chatID := update.Message.Chat.ID
 	messageID := update.Message.MessageID
 
-	if oldChatID, oldMessageID, ok := pr.Get(uid); ok && oldMessageID != 0 {
-		_, _ = bot.Request(tgbotapi.NewDeleteMessage(oldChatID, oldMessageID))
-	}
-	pr.Clear(uid)
 	HomePanel(update, bot, adminId, pr, userUC)
 	EnsureReplyKeyboard(bot, chatID)
 	_, _ = bot.Request(tgbotapi.NewDeleteMessage(chatID, messageID))
@@ -28,15 +23,12 @@ func StartHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, p
 
 func HomePanel(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *repository.PanelRepository, userUC *usecases.UserUsecase) {
 	var uid int64
-	var callbackChatID int64
-	var callbackMessageID int
-	fromCallback := false
 	if update.CallbackQuery != nil {
 		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+		if update.CallbackQuery.Message == nil {
+			return
+		}
 		uid = update.CallbackQuery.From.ID
-		callbackChatID = update.CallbackQuery.Message.Chat.ID
-		callbackMessageID = update.CallbackQuery.Message.MessageID
-		fromCallback = true
 	} else if update.Message != nil {
 		uid = update.Message.From.ID
 	} else {
@@ -52,25 +44,13 @@ func HomePanel(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *
 				text += "\n\n<i>Вы администратор — полный список команд в /help.</i>"
 			}
 			kb := ui.PaymentRevokedKeyboard()
-			if fromCallback {
-				if oldChatID, oldMessageID, ok := pr.Get(uid); ok && oldChatID == callbackChatID && oldMessageID != 0 {
-					EditPanelHTML(bot, pr, uid, oldChatID, oldMessageID, text, &kb, true)
-					if callbackMessageID != oldMessageID {
-						_, _ = bot.Request(tgbotapi.NewDeleteMessage(callbackChatID, callbackMessageID))
-					}
-					return
-				}
-				sendNewPanel(bot, pr, uid, callbackChatID, text, &kb)
-				_, _ = bot.Request(tgbotapi.NewDeleteMessage(callbackChatID, callbackMessageID))
-				return
-			}
 			EditPanelFromUpdate(bot, pr, update, uid, text, &kb, true)
 			return
 		}
 	}
 
 	text := "<b>Kovshik VPN</b>\n\n" +
-		"Все действия — кнопками в этом сообщении (оно одно на весь чат)."
+		"Выберите раздел ниже. Настройки, подписка и объявления открываются в этом сообщении."
 	if adminId == uid {
 		text += "\n\n<i>Вы администратор — полный список команд в /help.</i>"
 	}
@@ -81,20 +61,6 @@ func HomePanel(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *
 		}
 	}
 	kb := MainMenuKeyboard(userUC, uid, canRequestKey)
-
-	// сохранённую панель и удаляем источник callback, чтобы не плодить UI.
-	if fromCallback {
-		if oldChatID, oldMessageID, ok := pr.Get(uid); ok && oldChatID == callbackChatID && oldMessageID != 0 {
-			EditPanelHTML(bot, pr, uid, oldChatID, oldMessageID, text, &kb, true)
-			if callbackMessageID != oldMessageID {
-				_, _ = bot.Request(tgbotapi.NewDeleteMessage(callbackChatID, callbackMessageID))
-			}
-			return
-		}
-		sendNewPanel(bot, pr, uid, callbackChatID, text, &kb)
-		_, _ = bot.Request(tgbotapi.NewDeleteMessage(callbackChatID, callbackMessageID))
-		return
-	}
 
 	EditPanelFromUpdate(bot, pr, update, uid, text, &kb, true)
 }

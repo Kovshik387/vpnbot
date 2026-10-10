@@ -1,6 +1,11 @@
 package repository
 
-import "database/sql"
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"time"
+)
 
 type PaymentConfirmEntry struct {
 	ID          int64
@@ -26,8 +31,70 @@ create table if not exists payment_confirms (
   , username text not null
   , amount real not null
   , confirmed_at text not null default (datetime('now'))
+  , proof_message_id integer
 )`)
+	if err != nil {
+		return err
+	}
+	var hasProofColumn bool
+	if err := r.db.QueryRow(`select count(*) > 0 from pragma_table_info('payment_confirms') where name = 'proof_message_id'`).Scan(&hasProofColumn); err != nil {
+		return err
+	}
+	if !hasProofColumn {
+		if _, err := r.db.Exec(`alter table payment_confirms add column proof_message_id integer`); err != nil {
+			return err
+		}
+	}
+	_, err = r.db.Exec(`create unique index if not exists payment_confirms_proof on payment_confirms (user_id, proof_message_id)`)
 	return err
+}
+
+func (r *PaymentReportRepository) HasConfirmedProof(userID int64, proofMessageID int) (bool, error) {
+	var confirmed bool
+	err := r.db.QueryRow(`select exists(select 1 from payment_confirms where user_id = ? and proof_message_id = ?)`, userID, proofMessageID).Scan(&confirmed)
+	return confirmed, err
+}
+
+// ApplyConfirmedExtension записывает срок и журнал оплаты одной транзакцией.
+// Ненулевой ID сообщения с чеком защищает от повторного подтверждения одной оплаты.
+func (r *PaymentReportRepository) ApplyConfirmedExtension(userID int64, newPaymentDate time.Time, proofMessageID int) (bool, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if proofMessageID > 0 {
+		var confirmed bool
+		if err := tx.QueryRow(`select exists(select 1 from payment_confirms where user_id = ? and proof_message_id = ?)`, userID, proofMessageID).Scan(&confirmed); err != nil {
+			return false, err
+		}
+		if confirmed {
+			return false, nil
+		}
+	}
+	var username string
+	var amount float64
+	if err := tx.QueryRow(`select username, price from users where user_id = ?`, userID).Scan(&username, &amount); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, fmt.Errorf("пользователь %d не найден", userID)
+		}
+		return false, err
+	}
+	if _, err := tx.Exec(`update users set payment_date = ?, payment_reminder_stage = 0, payment_access_revoked = 0, awaiting_payment_screenshot = 0 where user_id = ?`, newPaymentDate, userID); err != nil {
+		return false, err
+	}
+	var proofID any
+	if proofMessageID > 0 {
+		proofID = proofMessageID
+	}
+	if _, err := tx.Exec(`insert into payment_confirms (user_id, username, amount, proof_message_id) values (?, ?, ?, ?)`, userID, username, amount, proofID); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *PaymentReportRepository) Add(userID int64, username string, amount float64) error {

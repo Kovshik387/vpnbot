@@ -31,20 +31,31 @@ func PaymentFlowHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *us
 	}
 	uid := update.CallbackQuery.From.ID
 	paid, err := userUC.IsPaidSubscription(uid)
-	if err != nil || !paid {
+	if err != nil {
+		log.Println("payment_flow subscription:", err)
+		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Не удалось загрузить оплату. Попробуйте позже."))
+		return
+	}
+	if !paid {
 		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Не требуется"))
+		kb := MainMenuKeyboard(userUC, uid, false)
+		EditPanelFromUpdate(bot, pr, update, uid, "Оплата сейчас не требуется. Если у вас есть вопросы, напишите в поддержку.", &kb, true)
 		return
 	}
 	_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 
-	if err := userUC.SetAwaitingPaymentScreenshot(uid, true); err != nil {
-		log.Println("payment_flow awaiting:", err)
-	}
-
 	price, err := userUC.GetPriceByUserID(uid)
 	if err != nil {
 		log.Println("payment_flow price:", err)
-		price = 0
+		kb := ui.PaymentRevokedKeyboard()
+		EditPanelFromUpdate(bot, pr, update, uid, "Не удалось загрузить сумму оплаты. Попробуйте позже или напишите в поддержку.", &kb, true)
+		return
+	}
+	if err := userUC.SetAwaitingPaymentScreenshot(uid, true); err != nil {
+		log.Println("payment_flow awaiting:", err)
+		kb := ui.PaymentRevokedKeyboard()
+		EditPanelFromUpdate(bot, pr, update, uid, "Не удалось начать оплату. Попробуйте позже или напишите в поддержку.", &kb, true)
+		return
 	}
 	amountLine := ""
 	if price > 0 {
@@ -124,5 +135,5 @@ func HandlePaymentPhoto(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *us
 }
 
 func CallbackExemptWhenPaymentRevoked(data string) bool {
-	return data == "payment_flow" || data == "pay_seen" || data == "panel_home"
+	return data == "payment_flow" || data == "pay_seen" || data == "panel_home" || data == "subscribe" || data == "help"
 }

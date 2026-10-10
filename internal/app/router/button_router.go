@@ -57,6 +57,28 @@ func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsec
 		"panel_home": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			user.HomePanel(update, bot, config.AdminId, uir.Panel, userUC)
 		},
+		"proxyl:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			offset, err := strconv.Atoi(strings.TrimPrefix(update.CallbackQuery.Data, "proxyl:"))
+			if err != nil || offset < 0 {
+				_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Некорректная страница"))
+				return
+			}
+			user.ProxyPageHandler(update, bot, uir.Proxy, uir.Panel, offset)
+		},
+		"proxyd:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			parts := strings.Split(strings.TrimPrefix(update.CallbackQuery.Data, "proxyd:"), ":")
+			if len(parts) != 2 {
+				_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Некорректный прокси"))
+				return
+			}
+			id, idErr := strconv.ParseInt(parts[0], 10, 64)
+			offset, offsetErr := strconv.Atoi(parts[1])
+			if idErr != nil || offsetErr != nil || id <= 0 || offset < 0 {
+				_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Некорректный прокси"))
+				return
+			}
+			user.ProxyDetailHandler(update, bot, uir.Proxy, uir.Panel, id, offset)
+		},
 		"pay_seen": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			user.PaymentSeenHandler(update, bot)
 		},
@@ -149,10 +171,12 @@ func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsec
 }
 
 func checkCallbackPermission(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64) error {
-	if update.CallbackQuery.Message.Chat.ID != adminId {
-		msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
-			"🔒 Это действие только для администратора.")
-		_, _ = bot.Send(msg)
+	q := update.CallbackQuery
+	if q == nil || q.From == nil || q.Message == nil || q.Message.Chat == nil {
+		return errors.New("нет отправителя действия")
+	}
+	if q.From.ID != adminId || !q.Message.Chat.IsPrivate() {
+		_, _ = bot.Request(tgbotapi.NewCallback(q.ID, "🔒 Это действие только для администратора."))
 		return errors.New("У тебя нет доступа к этой команде")
 	}
 	return nil

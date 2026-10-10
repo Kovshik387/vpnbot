@@ -21,6 +21,9 @@ func SayLogsPage(update tgbotapi.Update, bot *tgbotapi.BotAPI, sl *repository.Sa
 	_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 
 	uid := update.CallbackQuery.From.ID
+	if offset < 0 {
+		offset = 0
+	}
 	entries, err := sl.ListDesc(offset, sayLogPageSize+1)
 	if err != nil {
 		log.Println("say_logs list:", err)
@@ -37,7 +40,7 @@ func SayLogsPage(update tgbotapi.Update, bot *tgbotapi.BotAPI, sl *repository.Sa
 	var b strings.Builder
 	b.WriteString("<b>📣 Объявления</b>\n\n")
 	if len(entries) == 0 {
-		b.WriteString("Пока нет записей: после рассылки <code>/say</code> они появятся здесь.")
+		b.WriteString("Объявлений пока нет. Здесь появятся новости и сообщения от администратора.")
 	} else {
 		b.WriteString(fmt.Sprintf("Страница <b>%d</b> · всего записей: <b>%d</b>\n\n",
 			offset/sayLogPageSize+1, total))
@@ -63,10 +66,8 @@ func SayLogDetail(update tgbotapi.Update, bot *tgbotapi.BotAPI, sl *repository.S
 		EditPanelFromUpdate(bot, pr, update, uid, t, &kb, true)
 		return
 	}
-	body := utils.HtmlEscape(e.Body)
-	if len(body) > 3500 {
-		body = body[:3500] + "…"
-	}
+	// Ограничиваем исходный текст до escaping: нельзя разрывать UTF-8 или HTML entities.
+	body := utils.HtmlEscape(truncateMessageText(e.Body, 3500))
 	text := fmt.Sprintf("<b>Объявление #%d</b>\n<i>%s</i> · <i>%s</i>\n\n%s",
 		e.ID, utils.HtmlEscape(kindRu(e.Kind)), utils.HtmlEscape(e.CreatedAt), body)
 
@@ -121,4 +122,24 @@ func truncateRunes(s string, n int) string {
 		return s
 	}
 	return string(r[:n]) + "…"
+}
+
+// Telegram считает длину текста в UTF-16; emoji занимают две единицы.
+func truncateMessageText(s string, limit int) string {
+	units := 0
+	cut := len(s)
+	for i, r := range s {
+		width := 1
+		if r > 0xffff {
+			width = 2
+		}
+		if cut == len(s) && units+width > limit-1 {
+			cut = i
+		}
+		units += width
+		if units > limit {
+			return s[:cut] + "…"
+		}
+	}
+	return s
 }

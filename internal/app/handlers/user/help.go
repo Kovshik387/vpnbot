@@ -9,14 +9,11 @@ import (
 
 func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *repository.PanelRepository) {
 	var uid int64
-	var chatID int64
 	if update.CallbackQuery != nil {
 		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 		uid = update.CallbackQuery.From.ID
-		chatID = update.CallbackQuery.Message.Chat.ID
 	} else if update.Message != nil {
 		uid = update.Message.From.ID
-		chatID = update.Message.Chat.ID
 	} else {
 		return
 	}
@@ -25,14 +22,16 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr
 		"<b>Основное</b>\n" +
 		"• <code>/start</code> — главный экран\n" +
 		"• <code>/info</code> — настройка на телефоне, ПК или ТВ\n" +
+		"• <code>/subscribe</code> — моя подписка и ключ подключения\n" +
+		"• <code>/proxies</code> — прокси для Telegram и браузера\n" +
 		"• Кнопка <b>«Объявления»</b> — архив рассылок администратора\n"
 
-	if adminId == chatID {
+	if adminId == uid {
 		text += "\n<b>Админ: пользователи</b>\n" +
 			"• <code>/adduser</code> — добавить\n" +
 			"• <code>/deleteuser</code> — удалить\n" +
 			"• <code>/users [имя]</code> — список или поиск\n" +
-			"• <code>/block</code> / <code>/unblock</code> — блокировка\n" +
+			"• «Заблокировать» в заявке — блокировка; <code>/unblock &lt;ID&gt;</code> — разблокировка\n" +
 			"• <code>/blocked</code> — заблокированные\n" +
 			"• <code>/activity</code> — активные\n" +
 			"• <code>/count</code> — число активных\n\n" +
@@ -51,8 +50,11 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr
 			"• <code>/override</code> — перенос дат массово\n" +
 			"• <code>/normalizepay</code> — привести оплаты к текущему YYYY-MM\n" +
 			"• <code>/paystats [YYYY-MM]</code> — отчёт по подтверждённым оплатам\n\n" +
-			"<b>Сервис</b>\n" +
-			"<code>success anal deploy</code>"
+			"<b>Админ: прокси</b>\n" +
+			"• <code>/addproxy название | ссылка</code> — добавить прокси\n" +
+			"• <code>/editproxy ID название | ссылка</code> — изменить прокси\n" +
+			"• <code>/deleteproxy ID</code> — удалить прокси\n" +
+			"• <code>/proxylist</code> — список с ID\n"
 	}
 
 	keyboard := ui.HelpActionsKeyboard()

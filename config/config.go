@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -42,8 +41,10 @@ func LoadConfig() (*Config, error) {
 
 	adminId, err := strconv.ParseInt(adminStr, 10, 64)
 	if err != nil {
-		log.Panic(err)
-		return nil, err
+		return nil, errors.New("ADMIN_ID должен быть положительным числовым Telegram ID")
+	}
+	if adminId <= 0 {
+		return nil, errors.New("ADMIN_ID должен быть положительным числовым Telegram ID")
 	}
 
 	return &Config{

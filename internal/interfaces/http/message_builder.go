@@ -6,6 +6,7 @@ import (
 	"VpnBot/internal/utils"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -17,17 +18,20 @@ func NewMessageBuilder() service.MessageService {
 }
 
 func (*messageBuilder) SendUserInfo(user model.User, price float64) (string, bool, error) {
-	now := time.Now().Add(3 * time.Hour)
+	now := time.Now()
 	separator := "──────────────\n"
 
 	dateFlag := false
 	isActive := false
-	onlineAt, err := time.Parse("2006-01-02T15:04:05.999999", user.OnlineAt)
+	onlineAt, err := time.Parse(time.RFC3339Nano, user.OnlineAt)
+	if err != nil {
+		onlineAt, err = time.Parse("2006-01-02T15:04:05.999999", user.OnlineAt)
+	}
 	if err != nil {
 		log.Printf("Не удалось распарсить время для пользователя %s: %v\n", user.Username, err)
 		dateFlag = true
 	}
-	onlineAt = onlineAt.Add(3 * time.Hour)
+	onlineAt = onlineAt.In(time.FixedZone("MSK", 3*60*60))
 
 	var statusStr string
 	if now.Sub(onlineAt) <= 5*time.Minute {
@@ -56,6 +60,17 @@ func (*messageBuilder) SendUserInfo(user model.User, price float64) (string, boo
 	if price > 0 {
 		priceLine = fmt.Sprintf("<b>Оплата</b> %.2f\n", price)
 	}
+	subscriptionLine := "<b>Подписка (телефон)</b> Пока недоступна\n"
+	if strings.TrimSpace(user.SubscribedUrl) != "" {
+		subscriptionLine = fmt.Sprintf("<b>Подписка (телефон)</b> <a href=\"%s\">открыть</a>\n", utils.HtmlEscape(user.SubscribedUrl))
+	}
+	configLine := "<b>Конфиг (ПК)</b> Пока недоступен\n"
+	for _, link := range user.Links {
+		if strings.TrimSpace(link) != "" {
+			configLine = fmt.Sprintf("<b>Конфиг (ПК)</b> <code>%s</code>\n", utils.HtmlEscape(link))
+			break
+		}
+	}
 
 	response := fmt.Sprintf(
 		"%s<b>Логин</b> %s\n"+
@@ -63,8 +78,8 @@ func (*messageBuilder) SendUserInfo(user model.User, price float64) (string, boo
 			"<b>Последняя активность</b> %s\n"+
 			"<b>Трафик</b> %.1f ГБ\n"+
 			"%s"+
-			"<b>Подписка (телефон)</b> <a href=\"%s\">открыть</a>\n"+
-			"<b>Конфиг (ПК)</b> <tg-spoiler><code>%s</code></tg-spoiler>\n"+
+			"%s"+
+			"%s"+
 			"%s",
 		separator,
 		utils.HtmlEscape(user.Username),
@@ -72,8 +87,8 @@ func (*messageBuilder) SendUserInfo(user model.User, price float64) (string, boo
 		utils.HtmlEscape(onlineAtStr),
 		usage,
 		priceLine,
-		user.SubscribedUrl,
-		utils.HtmlEscape(user.Links[0]),
+		subscriptionLine,
+		configLine,
 		separator,
 	)
 

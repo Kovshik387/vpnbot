@@ -2,7 +2,10 @@ package service
 
 import (
 	"VpnBot/internal/domain/model"
+	"errors"
 )
+
+var ErrUserNotFound = errors.New("пользователь Marzban не найден")
 
 type MarzbanService interface {
 	Login() error

@@ -15,13 +15,15 @@ import (
 	"github.com/joho/godotenv"
 	"log"
 	_ "modernc.org/sqlite"
+	"net/http"
+	"os"
 	"strings"
+	"time"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Ошибка загрузки .env файла")
-		return
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Fatalf("Ошибка загрузки .env файла: %v", err)
 	}
 	if err := config.SetupLog(); err != nil {
 		log.Fatal(err)
@@ -33,7 +35,7 @@ func main() {
 		return
 	}
 
-	bot, err := tgbotapi.NewBotAPI(cfg.BotToken)
+	bot, err := tgbotapi.NewBotAPIWithClient(cfg.BotToken, tgbotapi.APIEndpoint, &http.Client{Timeout: 75 * time.Second})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,9 +47,16 @@ func main() {
 	marzbanClient := interfaces.NewMarzbanClient(cfg.MarzbanUrl, cfg.UsernameApi, cfg.PasswordApi)
 	yandexClient := interfaces.NewYandexClient()
 
-	db, err := sql.Open("sqlite", "data/bot.db") // путь к базе
+	if err := os.MkdirAll("data", 0700); err != nil {
+		log.Fatalf("Ошибка создания каталога данных: %v", err)
+	}
+	db, err := sql.Open("sqlite", "data/bot.db")
 	if err != nil {
 		log.Fatalf("Ошибка подключения к SQLite: %v", err)
+	}
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		log.Fatalf("Ошибка настройки SQLite: %v", err)
 	}
 	defer func(db *sql.DB) {
 		err := db.Close()
@@ -83,6 +92,11 @@ func main() {
 	if err := paymentReportRepo.Init(); err != nil {
 		log.Fatalf("payment_confirms init: %v", err)
 	}
+	proxyRepo := repository.NewProxyRepository(db)
+	if err := proxyRepo.Init(); err != nil {
+		log.Fatalf("proxies init: %v", err)
+	}
+	proxyUC := usecases.NewProxyUsecase(proxyRepo)
 
 	userUC := usecases.NewUserUsecase(marzbanClient, yandexClient, ur, pol, paymentReportRepo)
 	cooldownUC := usecases.NewCooldownUsecase(cr)
@@ -91,13 +105,24 @@ func main() {
 
 	reminderJob.Start()
 
-	uiR := &router.UIRepos{Panel: panelRepo, SayLog: sayLogRepo}
+	uiR := &router.UIRepos{Panel: panelRepo, SayLog: sayLogRepo, Proxy: proxyUC}
 	commandRouter := router.NewCommandRouter(userUC, cfg, uiR)
 	callbackRouter := router.NewCallbackRouter(userUC, cooldownUC, cfg, uiR)
 
 	log.Print("Бот включился")
 
 	for update := range updates {
+		// Panels, subscription links, and proxy credentials belong in private chats.
+		if update.Message != nil && !privateMessage(update.Message) {
+			if update.Message.Chat != nil && update.Message.IsCommand() {
+				_, _ = bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Откройте личный чат с ботом, чтобы пользоваться панелью."))
+			}
+			continue
+		}
+		if update.CallbackQuery != nil && !privateCallback(update.CallbackQuery) {
+			_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Откройте личный чат с ботом."))
+			continue
+		}
 
 		if update.Poll != nil || (update.Message != nil && update.Message.Poll != nil) {
 			log.Print("Действие опроса")
@@ -152,6 +177,10 @@ func main() {
 			}
 			if handler, ok := commandRouter[update.Message.Command()]; ok {
 				handler(update, bot)
+			} else {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Команда не найдена. Откройте /help или вернитесь в панель.")
+				msg.ReplyMarkup = ui.PanelShortcutKeyboard()
+				_, _ = bot.Send(msg)
 			}
 
 		case update.CallbackQuery != nil:
@@ -189,6 +218,15 @@ func main() {
 	select {}
 }
 
+func privateMessage(m *tgbotapi.Message) bool {
+	return m != nil && m.From != nil && m.Chat != nil && m.Chat.IsPrivate()
+}
+
+func privateCallback(q *tgbotapi.CallbackQuery) bool {
+	return q != nil && q.From != nil && q.Message != nil && q.Message.Chat != nil &&
+		q.Message.Chat.IsPrivate() && q.Message.Chat.ID == q.From.ID
+}
+
 func checkBlock(uc *usecases.UserUsecase, id int64) bool {
 	blocked, err := uc.CheckBlock(id)
 
@@ -200,7 +238,7 @@ func checkBlock(uc *usecases.UserUsecase, id int64) bool {
 }
 
 func paymentRevokedBlocksPlainText(uc *usecases.UserUsecase, m *tgbotapi.Message) bool {
-	if m == nil {
+	if m == nil || m.From == nil {
 		return false
 	}
 	revoked, err := uc.CheckPaymentRevoked(m.From.ID)
@@ -214,14 +252,19 @@ func paymentRevokedBlocksPlainText(uc *usecases.UserUsecase, m *tgbotapi.Message
 }
 
 func paymentRevokedBlocksCommand(uc *usecases.UserUsecase, m *tgbotapi.Message) bool {
-	if m == nil {
+	if m == nil || m.From == nil {
 		return false
 	}
 	revoked, err := uc.CheckPaymentRevoked(m.From.ID)
 	if err != nil || !revoked {
 		return false
 	}
-	return m.Command() != "start"
+	switch m.Command() {
+	case "start", "subscribe", "help":
+		return false
+	default:
+		return true
+	}
 }
 
 func paymentRevokedBlocksCallback(uc *usecases.UserUsecase, fromUserID int64, data string) bool {
@@ -248,6 +291,7 @@ func blockUser(update tgbotapi.Update, bot *tgbotapi.BotAPI, isCommand bool) {
 				"По вопросам разблокировки напишите администратору: @KovshikGo",
 		)
 	} else {
+		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Доступ ограничен"))
 		msg = tgbotapi.NewMessage(
 			update.CallbackQuery.Message.Chat.ID,
 			"🚫 <b>Доступ ограничен</b>\n\n"+

@@ -134,23 +134,36 @@ update users
 }
 
 func (r *UserRepository) UpdateTypePayment(username string, isFree bool) error {
-	_, err := r.db.Exec(`
+	result, err := r.db.Exec(`
 update users
    set is_free = ?
  where username = ?`,
 		isFree, username)
-	return err
+	return requireAffectedUser(result, err)
 }
 
 func (r *UserRepository) UpdatePaymentDate(username string, date time.Time) error {
-	_, err := r.db.Exec(`
+	result, err := r.db.Exec(`
 update users
    set payment_date = ?
      , payment_reminder_stage = 0
-     , payment_access_revoked = 0
  where username = ?`, date, username)
 
-	return err
+	return requireAffectedUser(result, err)
+}
+
+func requireAffectedUser(result sql.Result, err error) error {
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r *UserRepository) Block(userID int64, block bool) error {
@@ -380,8 +393,7 @@ func (r *UserRepository) OverrideDate(date time.Time, dateOverride time.Time) er
 update users
    set payment_date = ?
      , payment_reminder_stage = 0
-     , payment_access_revoked = 0
- where date(payment_date) = ?`, dateOverride, oldDateStr)
+ where date(substr(payment_date, 1, 19)) = ?`, dateOverride, oldDateStr)
 
 	return err
 }
@@ -390,7 +402,7 @@ func (r *UserRepository) AddCompensationDays(daysCount int) error {
 	_, err := r.db.Exec(`
 update users
    set payment_date = datetime(
-           coalesce(payment_date, '2024-11-21 00:00:00'), '+' || ? || ' days')
+           substr(coalesce(payment_date, '2024-11-21 00:00:00'), 1, 19), '+' || ? || ' days')
      , payment_reminder_stage = 0
  where is_free = 0 /* paid tier */
 `, daysCount)
@@ -400,6 +412,16 @@ update users
 
 // ListPaidUsersForBilling — платные активные (не заблокированы админом), с датой оплаты.
 func (r *UserRepository) ListPaidUsersForBilling() ([]model.TgUserModel, error) {
+	return r.listBillingUsers(false)
+}
+
+// ListUsersForBilling включает бесплатных пользователей с отозванным доступом,
+// чтобы восстановление после изменения тарифа можно было повторить при сбое Marzban.
+func (r *UserRepository) ListUsersForBilling() ([]model.TgUserModel, error) {
+	return r.listBillingUsers(true)
+}
+
+func (r *UserRepository) listBillingUsers(includeRevoked bool) ([]model.TgUserModel, error) {
 	rows, err := r.db.Query(`
    select us.user_id as user_id
         , us.username as username
@@ -411,9 +433,9 @@ func (r *UserRepository) ListPaidUsersForBilling() ([]model.TgUserModel, error) 
         , coalesce(us.payment_access_revoked, 0) as payment_access_revoked
         , coalesce(us.awaiting_payment_screenshot, 0) as awaiting_payment_screenshot
      from users us
-    where us.is_free = 0
-      and us.is_block = 0
-      and us.payment_date is not null`)
+    where us.is_block = 0
+      and ((us.is_free = 0 and us.payment_date is not null)
+           or (? and us.payment_access_revoked = 1))`, includeRevoked)
 	if err != nil {
 		return nil, err
 	}
@@ -495,11 +517,22 @@ func (r *UserRepository) GetAwaitingPaymentScreenshot(userID int64) (bool, error
 	return n != 0, nil
 }
 
-func (r *UserRepository) SetPaymentReminderStage(userID int64, stage int) error {
-	_, err := r.db.Exec(`
+func (r *UserRepository) SetPaymentReminderStage(userID int64, stage int, expectedPaymentDates ...*time.Time) error {
+	query := `
 update users
-   set payment_reminder_stage = ?
- where user_id = ?`, stage, userID)
+   set payment_reminder_stage = max(payment_reminder_stage, ?)
+ where user_id = ?`
+	args := []any{stage, userID}
+	if len(expectedPaymentDates) > 0 {
+		if expectedPaymentDates[0] == nil {
+			return nil
+		}
+		// Биллинг использует календарную дату; формат хранения timestamp может
+		// отличаться для записей, созданных Go и SQLite.
+		query += ` and substr(payment_date, 1, 10) = ?`
+		args = append(args, expectedPaymentDates[0].Format("2006-01-02"))
+	}
+	_, err := r.db.Exec(query, args...)
 	return err
 }
 
@@ -617,7 +650,7 @@ func (r *UserRepository) NormalizePaymentDatesToCurrentMonth(now time.Time) (int
 		// Если дата уже в прошлом относительно сегодняшнего дня, переносим на следующий месяц,
 		// чтобы пользователь не платил второй раз в этом же цикле.
 		if target.Before(today) {
-			nextMonth := today.AddDate(0, 1, 0)
+			nextMonth := time.Date(today.Year(), today.Month()+1, 1, 0, 0, 0, 0, today.Location())
 			target = clampDateByDay(nextMonth.Year(), nextMonth.Month(), day, today.Location())
 		}
 
@@ -625,7 +658,6 @@ func (r *UserRepository) NormalizePaymentDatesToCurrentMonth(now time.Time) (int
 update users
    set payment_date = ?
      , payment_reminder_stage = 0
-     , payment_access_revoked = 0
  where user_id = ?`, target, u.userID); err != nil {
 			return 0, err
 		}

@@ -40,11 +40,18 @@ func HomeScreenKeyboard(showRequestKey, showPaymentRow bool) tgbotapi.InlineKeyb
 			tgbotapi.NewInlineKeyboardButtonData("🔑 Запросить ключ", "request_key"),
 		))
 	}
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🌐 Прокси", "proxyl:0"),
+	))
 	if showPaymentRow {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("💳 Оплата", "payment_flow"),
 		))
 	}
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("❓ Помощь", "help"),
+		tgbotapi.NewInlineKeyboardButtonURL("💬 Поддержка", URLSupport),
+	))
 	return WithNavFooter(tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows})
 }
 
@@ -67,6 +74,9 @@ func PaymentRevokedKeyboard() tgbotapi.InlineKeyboardMarkup {
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("🏠 Панель", "panel_home"),
 		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonURL("💬 Поддержка", URLSupport),
+		),
 	)
 }
 
@@ -76,6 +86,9 @@ func HelpActionsKeyboard() tgbotapi.InlineKeyboardMarkup {
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("⚙️ Настройка VPN", "info"),
 			tgbotapi.NewInlineKeyboardButtonData("📋 Моя подписка", "subscribe"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonURL("💬 Поддержка", URLSupport),
 		),
 	))
 }

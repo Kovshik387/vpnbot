@@ -13,6 +13,9 @@ import (
 func PanelTarget(update tgbotapi.Update, pr *repository.PanelRepository, userID int64) (chatID int64, messageID int, ok bool) {
 	if update.CallbackQuery != nil && update.CallbackQuery.Message != nil {
 		m := update.CallbackQuery.Message
+		if storedChat, mid, has := pr.Get(userID); has && storedChat == m.Chat.ID && mid != 0 {
+			return storedChat, mid, true
+		}
 		return m.Chat.ID, m.MessageID, true
 	}
 	if update.Message != nil {
@@ -40,10 +43,9 @@ func needsNewPanelMessage(err error) bool {
 // EditPanelHTML правит одно сообщение-панель или создаёт новое при первом обращении / потере сообщения.
 func EditPanelHTML(bot *tgbotapi.BotAPI, pr *repository.PanelRepository, userID, chatID int64, messageID int,
 	text string, markup *tgbotapi.InlineKeyboardMarkup, disableWebPreview bool,
-) {
+) bool {
 	if messageID == 0 {
-		sendNewPanel(bot, pr, userID, chatID, text, markup)
-		return
+		return sendNewPanel(bot, pr, userID, chatID, text, markup, disableWebPreview)
 	}
 	edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
 	edit.ParseMode = tgbotapi.ModeHTML
@@ -53,58 +55,60 @@ func EditPanelHTML(bot *tgbotapi.BotAPI, pr *repository.PanelRepository, userID,
 	if err != nil {
 		if strings.Contains(err.Error(), "message is not modified") {
 			_ = pr.Set(userID, chatID, messageID)
-			return
+			return true
 		}
 		if needsNewPanelMessage(err) {
-			sendNewPanel(bot, pr, userID, chatID, text, markup)
-			return
+			return sendNewPanel(bot, pr, userID, chatID, text, markup, disableWebPreview)
 		}
 		log.Println("edit panel:", err)
-		return
+		return false
 	}
 	if err := pr.Set(userID, chatID, messageID); err != nil {
 		log.Println("panel persist:", err)
 	}
+	return true
 }
 
 func sendNewPanel(bot *tgbotapi.BotAPI, pr *repository.PanelRepository, userID, chatID int64,
-	text string, markup *tgbotapi.InlineKeyboardMarkup,
-) {
-	if oldChatID, oldMessageID, ok := pr.Get(userID); ok && oldChatID == chatID && oldMessageID != 0 {
-		_, _ = bot.Request(tgbotapi.NewDeleteMessage(oldChatID, oldMessageID))
-	}
-
+	text string, markup *tgbotapi.InlineKeyboardMarkup, disableWebPreview bool,
+) bool {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = tgbotapi.ModeHTML
 	msg.ReplyMarkup = markup
+	msg.DisableWebPagePreview = disableWebPreview
 	sent, err := bot.Send(msg)
 	if err != nil {
 		log.Println("send panel:", err)
-		return
+		return false
+	}
+	if oldChatID, oldMessageID, ok := pr.Get(userID); ok && oldChatID == chatID && oldMessageID != 0 && oldMessageID != sent.MessageID {
+		_, _ = bot.Request(tgbotapi.NewDeleteMessage(oldChatID, oldMessageID))
 	}
 	if err := pr.Set(userID, chatID, sent.MessageID); err != nil {
 		log.Println("panel persist:", err)
 	}
+	return true
 }
 
 func EditPanelFromUpdate(bot *tgbotapi.BotAPI, pr *repository.PanelRepository, update tgbotapi.Update, userID int64,
 	text string, markup *tgbotapi.InlineKeyboardMarkup, disableWebPreview bool,
 ) {
-	if update.CallbackQuery != nil && update.CallbackQuery.Message != nil {
-		currentChatID := update.CallbackQuery.Message.Chat.ID
-		currentMessageID := update.CallbackQuery.Message.MessageID
-		if oldChatID, oldMessageID, ok := pr.Get(userID); ok &&
-			oldChatID == currentChatID && oldMessageID != 0 && oldMessageID != currentMessageID {
-			_, _ = bot.Request(tgbotapi.NewDeleteMessage(oldChatID, oldMessageID))
-		}
-	}
-
 	ch, mid, ok := PanelTarget(update, pr, userID)
-	if !ok {
-		sendNewPanel(bot, pr, userID, ch, text, markup)
+	if ch == 0 {
 		return
 	}
-	EditPanelHTML(bot, pr, userID, ch, mid, text, markup, disableWebPreview)
+	if !ok {
+		mid = 0
+	}
+	if !EditPanelHTML(bot, pr, userID, ch, mid, text, markup, disableWebPreview) {
+		return
+	}
+	if update.CallbackQuery != nil && update.CallbackQuery.Message != nil {
+		m := update.CallbackQuery.Message
+		if panelChat, panelMessage, has := pr.Get(userID); has && panelChat == m.Chat.ID && panelMessage != m.MessageID {
+			_, _ = bot.Request(tgbotapi.NewDeleteMessage(m.Chat.ID, m.MessageID))
+		}
+	}
 }
 
 func EditPanelHTMLForUser(bot *tgbotapi.BotAPI, pr *repository.PanelRepository, userID int64,

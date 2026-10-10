@@ -3,33 +3,33 @@ package admin
 import (
 	"VpnBot/internal/app/usecases"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"strconv"
-	"strings"
+	"log"
 )
 
 func DenyHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, cdUC *usecases.CooldownUsecase, adminId int64) {
-	param := strings.TrimPrefix(update.CallbackQuery.Data, "deny:")
-	id := strings.Split(param, " ")
-
-	targetID, err := strconv.ParseInt(id[0], 10, 64)
+	if update.CallbackQuery == nil {
+		return
+	}
+	targetID, _, err := requestCallbackTarget(update.CallbackQuery, "deny:")
 	if err != nil {
-		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Ошибка: некорректный id"))
+		answerRequestCallback(bot, update.CallbackQuery, "Ошибка: некорректная заявка")
 		return
 	}
 
-	parts := strings.Split(update.CallbackQuery.Data, ":")
-	if len(parts) != 2 {
+	if err := cdUC.SetCooldown(targetID); err != nil {
+		log.Println("deny set cooldown:", err)
+		answerRequestCallback(bot, update.CallbackQuery, "Не удалось отклонить заявку. Попробуйте позже.")
 		return
 	}
 
-	_ = cdUC.SetCooldown(targetID)
-
-	_, _ = bot.Send(tgbotapi.NewMessage(targetID, "❌ Ваша заявка отклонена"))
+	if _, err := bot.Send(tgbotapi.NewMessage(targetID, "❌ Ваша заявка отклонена")); err != nil {
+		log.Println("deny notify:", err)
+		answerRequestCallback(bot, update.CallbackQuery, "Заявка отклонена, но уведомление не доставлено")
+		return
+	}
 
 	delMsg := tgbotapi.NewDeleteMessage(adminId, update.CallbackQuery.Message.MessageID)
 	_, _ = bot.Request(delMsg)
 
-	_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Заявка отклонена"))
-	_, _ = bot.Send(tgbotapi.NewEditMessageReplyMarkup(adminId, update.CallbackQuery.Message.MessageID,
-		tgbotapi.InlineKeyboardMarkup{}))
+	answerRequestCallback(bot, update.CallbackQuery, "Заявка отклонена")
 }
