@@ -2,6 +2,7 @@ package user
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -108,18 +109,27 @@ func proxyCard(p model.Proxy) (text, connectURL string) {
 	}
 	var kind, host, port, username, password, secret string
 	scheme := strings.ToLower(u.Scheme)
-	if scheme == "tg" || (scheme == "https" && strings.EqualFold(u.Hostname(), "t.me") && (u.Path == "/proxy" || u.Path == "/socks")) {
+	path := strings.ToLower(strings.TrimPrefix(u.Path, "/"))
+	if scheme == "tg" {
+		path = strings.ToLower(u.Host)
+	}
+	telegramPath := path == "proxy" || path == "socks" || path == "webproxy"
+	if telegramPath && (scheme == "tg" || (scheme == "https" && strings.EqualFold(u.Hostname(), "t.me"))) {
 		q := u.Query()
 		host, port = q.Get("server"), q.Get("port")
 		username, password, secret = q.Get("user"), q.Get("pass"), q.Get("secret")
-		path := strings.TrimPrefix(u.Path, "/")
-		if scheme == "tg" {
-			path = strings.ToLower(u.Host)
-		}
 		connectURL = "https://t.me/" + path + "?" + q.Encode()
-		if path == "proxy" {
+		switch path {
+		case "proxy":
 			kind = "Telegram MTProto"
-		} else {
+		case "webproxy":
+			kind = "Telegram WEB"
+			// Uppercase hex can resemble a marked base64url secret to the client.
+			if decoded, err := hex.DecodeString(secret); err == nil && (len(decoded) == 16 || (len(decoded) == 17 && decoded[0] == 0xdd)) {
+				q.Set("secret", strings.ToLower(secret))
+			}
+			connectURL = "tg://webproxy?" + q.Encode()
+		default:
 			kind = "SOCKS5"
 		}
 	} else {
@@ -145,8 +155,11 @@ func proxyCard(p model.Proxy) (text, connectURL string) {
 			return "Формат прокси не поддерживается. Обратитесь в поддержку.", ""
 		}
 	}
-	text = fmt.Sprintf("<b>🌐 %s</b>\n<i>%s · #%d</i>\n\n<b>Адрес:</b> <code>%s</code>\n<b>Порт:</b> <code>%s</code>\n",
-		utils.HtmlEscape(p.Name), kind, p.ID, utils.HtmlEscape(host), utils.HtmlEscape(port))
+	text = fmt.Sprintf("<b>🌐 %s</b>\n<i>%s · #%d</i>\n\n<b>Адрес:</b> <code>%s</code>\n",
+		utils.HtmlEscape(p.Name), kind, p.ID, utils.HtmlEscape(host))
+	if kind != "Telegram WEB" {
+		text += "<b>Порт:</b> <code>" + utils.HtmlEscape(port) + "</code>\n"
+	}
 	if username != "" {
 		text += "<b>Логин:</b> <code>" + utils.HtmlEscape(username) + "</code>\n"
 	}
@@ -154,10 +167,17 @@ func proxyCard(p model.Proxy) (text, connectURL string) {
 		text += "<b>Пароль:</b> <code>" + utils.HtmlEscape(password) + "</code>\n"
 	}
 	if secret != "" {
-		text += "<b>Секрет:</b> <code>" + utils.HtmlEscape(secret) + "</code>\n"
+		label := "Секрет"
+		if kind == "Telegram WEB" {
+			label = "Секрет ссылки"
+		}
+		text += "<b>" + label + ":</b> <code>" + utils.HtmlEscape(secret) + "</code>\n"
 	}
 	if connectURL != "" {
 		text += "\nНажмите «Подключить в Telegram» и подтвердите подключение.\n"
+		if kind == "Telegram WEB" {
+			text += "Нужен клиент Telegram с поддержкой WEB-прокси. Соединение использует HTTPS на порту 443.\n"
+		}
 	} else {
 		text += "\nУкажите тип, адрес и порт в настройках прокси браузера или системы. Если требуется авторизация, используйте логин и пароль выше.\n"
 	}

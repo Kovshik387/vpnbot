@@ -18,6 +18,12 @@ type CallbackHandler func(update tgbotapi.Update, bot *tgbotapi.BotAPI)
 
 func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsecase, config *config.Config, uir *UIRepos) map[string]CallbackHandler {
 	return map[string]CallbackHandler{
+		"users:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			if err := checkCallbackPermission(update, bot, config.AdminId); err != nil {
+				return
+			}
+			admin.UsersCallbackHandler(update, bot, userUC, uir.Panel)
+		},
 		"approve:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			err := checkCallbackPermission(update, bot, config.AdminId)
 			if err != nil {
@@ -56,6 +62,9 @@ func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsec
 		},
 		"panel_home": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			user.HomePanel(update, bot, config.AdminId, uir.Panel, userUC)
+		},
+		"panel_open": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			user.MenuHandler(update, bot, config.AdminId, uir.Panel, userUC)
 		},
 		"proxyl:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			offset, err := strconv.Atoi(strings.TrimPrefix(update.CallbackQuery.Data, "proxyl:"))

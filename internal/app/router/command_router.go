@@ -21,6 +21,9 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config, ui *U
 	baseHandlers["start"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		user.StartHandler(update, bot, config.AdminId, ui.Panel, userUC)
 	}
+	baseHandlers["menu"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+		user.MenuHandler(update, bot, config.AdminId, ui.Panel, userUC)
+	}
 
 	baseHandlers["ping"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		user.PingHandler(update, bot, config.RussianUrl, config.AdminId, ui.Panel)
@@ -73,14 +76,7 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config, ui *U
 			return
 		}
 
-		args := strings.Fields(update.Message.Text)
-
-		if len(args) > 1 {
-			username := args[1]
-			admin.SearchUserHandler(update, bot, userUC, username)
-		} else {
-			admin.UserListHandler(update, bot, userUC, false)
-		}
+		admin.UserListHandler(update, bot, userUC, ui.Panel, update.Message.CommandArguments(), false)
 	}
 
 	baseHandlers["activity"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
@@ -90,7 +86,7 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config, ui *U
 			return
 		}
 
-		admin.UserListHandler(update, bot, userUC, true)
+		admin.UserListHandler(update, bot, userUC, ui.Panel, update.Message.CommandArguments(), true)
 	}
 
 	baseHandlers["status"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {

@@ -2,6 +2,10 @@ package ui
 
 import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
+func AdminUsersRow() []tgbotapi.InlineKeyboardButton {
+	return tgbotapi.NewInlineKeyboardRow(tgbotapi.NewInlineKeyboardButtonData("👥 Пользователи", "users:open"))
+}
+
 // WithNavFooter добавляет строку «Главная» и «Объявления».
 func WithNavFooter(m tgbotapi.InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
 	rows := append([][]tgbotapi.InlineKeyboardButton{}, m.InlineKeyboard...)
@@ -23,7 +27,7 @@ func PanelShortcutKeyboard() tgbotapi.InlineKeyboardMarkup {
 
 func panelShowRow() []tgbotapi.InlineKeyboardButton {
 	return tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🏠 Показать панель", "panel_home"),
+		tgbotapi.NewInlineKeyboardButtonData("🏠 Показать панель", "panel_open"),
 	)
 }
 

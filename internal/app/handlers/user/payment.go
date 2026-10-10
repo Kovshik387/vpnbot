@@ -135,5 +135,5 @@ func HandlePaymentPhoto(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *us
 }
 
 func CallbackExemptWhenPaymentRevoked(data string) bool {
-	return data == "payment_flow" || data == "pay_seen" || data == "panel_home" || data == "subscribe" || data == "help"
+	return data == "payment_flow" || data == "pay_seen" || data == "panel_home" || data == "panel_open" || data == "subscribe" || data == "help"
 }

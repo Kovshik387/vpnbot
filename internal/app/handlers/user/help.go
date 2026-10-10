@@ -20,7 +20,8 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr
 
 	text := "<b>Команды</b>\n\n" +
 		"<b>Основное</b>\n" +
-		"• <code>/start</code> — главный экран\n" +
+		"• <code>/menu</code> — открыть меню в конце чата\n" +
+		"• <code>/start</code> — открыть главный экран в конце чата\n" +
 		"• <code>/info</code> — настройка на телефоне, ПК или ТВ\n" +
 		"• <code>/subscribe</code> — моя подписка и ключ подключения\n" +
 		"• <code>/proxies</code> — прокси для Telegram и браузера\n" +
@@ -30,7 +31,7 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr
 		text += "\n<b>Админ: пользователи</b>\n" +
 			"• <code>/adduser</code> — добавить\n" +
 			"• <code>/deleteuser</code> — удалить\n" +
-			"• <code>/users [имя]</code> — список или поиск\n" +
+			"• <code>/users [часть логина]</code> — список с поиском и страницами; <code>/users f***</code> — логины на f\n" +
 			"• «Заблокировать» в заявке — блокировка; <code>/unblock &lt;ID&gt;</code> — разблокировка\n" +
 			"• <code>/blocked</code> — заблокированные\n" +
 			"• <code>/activity</code> — активные\n" +

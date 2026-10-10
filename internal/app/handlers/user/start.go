@@ -9,30 +9,45 @@ import (
 )
 
 func StartHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *repository.PanelRepository, userUC *usecases.UserUsecase) {
-	if update.Message == nil {
+	if update.Message == nil || update.Message.From == nil || update.Message.Chat == nil {
 		return
 	}
+	if _, _, hasPanel := pr.Get(update.Message.From.ID); !hasPanel {
+		EnsureReplyKeyboard(bot, update.Message.Chat.ID)
+	}
+	MenuHandler(update, bot, adminId, pr, userUC)
+}
 
-	chatID := update.Message.Chat.ID
-	messageID := update.Message.MessageID
-
-	HomePanel(update, bot, adminId, pr, userUC)
-	EnsureReplyKeyboard(bot, chatID)
-	_, _ = bot.Request(tgbotapi.NewDeleteMessage(chatID, messageID))
+func MenuHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *repository.PanelRepository, userUC *usecases.UserUsecase) {
+	if !showHomePanel(update, bot, adminId, pr, userUC, true) {
+		return
+	}
+	if update.Message != nil {
+		_, _ = bot.Request(tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID))
+	}
 }
 
 func HomePanel(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *repository.PanelRepository, userUC *usecases.UserUsecase) {
-	var uid int64
-	if update.CallbackQuery != nil {
+	showHomePanel(update, bot, adminId, pr, userUC, false)
+}
+
+func showHomePanel(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *repository.PanelRepository, userUC *usecases.UserUsecase, fresh bool) bool {
+	var uid, chatID int64
+	if update.CallbackQuery != nil && update.CallbackQuery.From != nil && update.CallbackQuery.Message != nil && update.CallbackQuery.Message.Chat != nil {
 		_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
-		if update.CallbackQuery.Message == nil {
-			return
-		}
 		uid = update.CallbackQuery.From.ID
-	} else if update.Message != nil {
+		chatID = update.CallbackQuery.Message.Chat.ID
+	} else if update.Message != nil && update.Message.From != nil && update.Message.Chat != nil {
 		uid = update.Message.From.ID
+		chatID = update.Message.Chat.ID
 	} else {
-		return
+		return false
+	}
+	render := func(text string, kb tgbotapi.InlineKeyboardMarkup) bool {
+		if fresh {
+			return EditPanelHTML(bot, pr, uid, chatID, 0, text, &kb, true)
+		}
+		return EditPanelFromUpdate(bot, pr, update, uid, text, &kb, true)
 	}
 
 	if userUC != nil {
@@ -44,13 +59,13 @@ func HomePanel(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *
 				text += "\n\n<i>Вы администратор — полный список команд в /help.</i>"
 			}
 			kb := ui.PaymentRevokedKeyboard()
-			EditPanelFromUpdate(bot, pr, update, uid, text, &kb, true)
-			return
+			return render(text, kb)
 		}
 	}
 
 	text := "<b>Kovshik VPN</b>\n\n" +
-		"Выберите раздел ниже. Настройки, подписка и объявления открываются в этом сообщении."
+		"Выберите раздел ниже. Настройки, подписка и объявления открываются в этом сообщении.\n\n" +
+		"Чтобы вернуть меню в конец чата, отправьте /menu."
 	if adminId == uid {
 		text += "\n\n<i>Вы администратор — полный список команд в /help.</i>"
 	}
@@ -61,6 +76,9 @@ func HomePanel(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr *
 		}
 	}
 	kb := MainMenuKeyboard(userUC, uid, canRequestKey)
+	if adminId == uid {
+		kb.InlineKeyboard = append([][]tgbotapi.InlineKeyboardButton{ui.AdminUsersRow()}, kb.InlineKeyboard...)
+	}
 
-	EditPanelFromUpdate(bot, pr, update, uid, text, &kb, true)
+	return render(text, kb)
 }

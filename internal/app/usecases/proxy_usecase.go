@@ -85,13 +85,13 @@ func normalizeProxy(name, proxyURL string) (string, string, error) {
 	switch strings.ToLower(parsed.Scheme) {
 	case "tg":
 		if parsed.User != nil || parsed.Port() != "" || parsed.Path != "" || parsed.RawPath != "" {
-			return "", "", fmt.Errorf("ожидается tg://proxy или tg://socks с параметрами подключения")
+			return "", "", fmt.Errorf("ожидается tg://proxy, tg://socks или tg://webproxy с параметрами подключения")
 		}
 		if err := validateTelegramProxy(parsed, strings.ToLower(parsed.Host)); err != nil {
 			return "", "", err
 		}
 	case "https":
-		if strings.EqualFold(parsed.Hostname(), "t.me") && (parsed.Path == "/proxy" || parsed.Path == "/socks") {
+		if strings.EqualFold(parsed.Hostname(), "t.me") && (parsed.Path == "/proxy" || parsed.Path == "/socks" || parsed.Path == "/webproxy") {
 			if parsed.User != nil || parsed.Port() != "" || parsed.RawPath != "" {
 				return "", "", fmt.Errorf("неверный формат Telegram-ссылки прокси")
 			}
@@ -106,14 +106,14 @@ func normalizeProxy(name, proxyURL string) (string, string, error) {
 			return "", "", err
 		}
 	default:
-		return "", "", fmt.Errorf("поддерживаются Telegram MTProto/SOCKS5, socks5://, socks5h://, http:// и https:// с адресом и портом")
+		return "", "", fmt.Errorf("поддерживаются ссылки Telegram MTProto/SOCKS5/WEB и адреса socks5://, socks5h://, http://, https:// с портом")
 	}
 	return name, proxyURL, nil
 }
 
 func validateTelegramProxy(parsed *url.URL, kind string) error {
-	if kind != "proxy" && kind != "socks" {
-		return fmt.Errorf("поддерживаются только Telegram-ссылки tg://proxy и tg://socks")
+	if kind != "proxy" && kind != "socks" && kind != "webproxy" {
+		return fmt.Errorf("поддерживаются Telegram-ссылки tg://proxy, tg://socks и tg://webproxy")
 	}
 	query, err := url.ParseQuery(parsed.RawQuery)
 	if err != nil {
@@ -126,6 +126,9 @@ func validateTelegramProxy(parsed *url.URL, kind string) error {
 		if strings.IndexFunc(values[0], unicode.IsControl) >= 0 {
 			return fmt.Errorf("параметры ссылки не должны содержать управляющие символы")
 		}
+	}
+	if kind == "webproxy" {
+		return validateWebProxy(query)
 	}
 	if !validProxyHost(query.Get("server")) {
 		return fmt.Errorf("server должен содержать корректный IP-адрес или имя сервера")
@@ -142,6 +145,88 @@ func validateTelegramProxy(parsed *url.URL, kind string) error {
 		}
 	}
 	return nil
+}
+
+func validateWebProxy(query url.Values) error {
+	if query.Has("port") || query.Has("user") || query.Has("pass") {
+		return fmt.Errorf("Telegram WEB использует HTTPS и порт 443: укажите только server и secret, без port, user и pass")
+	}
+	host, basePath, _ := strings.Cut(query.Get("server"), "/")
+	if !validWebProxyHost(host) {
+		return fmt.Errorf("server для Telegram WEB должен содержать DNS-имя без схемы и порта; для международных доменов используйте Punycode")
+	}
+	basePath = strings.TrimSuffix(basePath, "/")
+	if !validWebProxyBasePath(basePath) {
+		return fmt.Errorf("путь Telegram WEB должен быть не длиннее 128 символов; сегменты начинаются с буквы или цифры и содержат только A-Z, a-z, 0-9, - и _")
+	}
+	if !validWebProxySecret(query.Get("secret"), basePath != "") {
+		if basePath != "" {
+			return fmt.Errorf("ссылка Telegram WEB с путём требует secret в base64url с маркером 0x70; скопируйте готовую ссылку с сервера")
+		}
+		return fmt.Errorf("secret для Telegram WEB должен содержать 16 байт либо 17 байт с префиксом dd, в hex или base64url")
+	}
+	return nil
+}
+
+func validWebProxyHost(host string) bool {
+	if !validProxyHost(host) || !strings.Contains(host, ".") || strings.HasSuffix(host, ".") || net.ParseIP(host) != nil {
+		return false
+	}
+	if strings.IndexFunc(host, func(r rune) bool { return r > unicode.MaxASCII }) >= 0 {
+		return false
+	}
+	// Browser host parsing treats a numeric last label as an IPv4 address,
+	// including shorthand forms such as 127.1 and 0x7f.1.
+	lastLabel := strings.ToLower(host[strings.LastIndexByte(host, '.')+1:])
+	return strings.Trim(lastLabel, "0123456789") != "" &&
+		!(strings.HasPrefix(lastLabel, "0x") && strings.Trim(lastLabel[2:], "0123456789abcdef") == "")
+}
+
+func validWebProxyBasePath(basePath string) bool {
+	if basePath == "" {
+		return true
+	}
+	if len(basePath) > 128 {
+		return false
+	}
+	for _, segment := range strings.Split(basePath, "/") {
+		if segment == "" {
+			return false
+		}
+		for i, r := range segment {
+			letterOrDigit := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+			if !letterOrDigit && !(i > 0 && (r == '-' || r == '_')) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validWebProxySecret(secret string, hasBasePath bool) bool {
+	validSecret := func(decoded []byte) bool {
+		return len(decoded) == 16 || (len(decoded) == 17 && decoded[0] == 0xdd)
+	}
+	if !hasBasePath {
+		if decoded, err := hex.DecodeString(secret); err == nil && validSecret(decoded) {
+			return true
+		}
+	}
+	// Links with a base path mark their secret so clients without path support
+	// reject it instead of silently connecting to the host root.
+	for _, encoding := range []*base64.Encoding{base64.RawURLEncoding, base64.URLEncoding} {
+		decoded, err := encoding.DecodeString(secret)
+		if err != nil {
+			continue
+		}
+		if len(decoded) >= 17 && decoded[0] == 0x70 {
+			return validSecret(decoded[1:])
+		}
+		if !hasBasePath && validSecret(decoded) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateProxyEndpoint(parsed *url.URL) error {

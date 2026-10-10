@@ -16,7 +16,8 @@ import (
 const proxyCommandHelp = "Формат: /addproxy название | ссылка\n" +
 	"Изменить: /editproxy ID название | ссылка\n" +
 	"Удалить: /deleteproxy ID\nСписок ID: /proxylist\n\n" +
-	"Поддерживаются Telegram MTProto, SOCKS5 и HTTP/HTTPS с адресом и портом."
+	"Поддерживаются Telegram MTProto, Telegram WEB, SOCKS5 и HTTP/HTTPS.\n" +
+	"Для MTProto, SOCKS5 и HTTP/HTTPS нужен порт; Telegram WEB — без порта (HTTPS, 443)."
 
 func parseProxyCommand(args string, withID bool) (int64, string, string, error) {
 	name, rawURL, ok := strings.Cut(args, "|")

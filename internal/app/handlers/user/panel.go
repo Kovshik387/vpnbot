@@ -13,18 +13,15 @@ import (
 func PanelTarget(update tgbotapi.Update, pr *repository.PanelRepository, userID int64) (chatID int64, messageID int, ok bool) {
 	if update.CallbackQuery != nil && update.CallbackQuery.Message != nil {
 		m := update.CallbackQuery.Message
-		if storedChat, mid, has := pr.Get(userID); has && storedChat == m.Chat.ID && mid != 0 {
+		if storedChat, mid, has := pr.Get(userID); has && storedChat == m.Chat.ID && mid == m.MessageID {
 			return storedChat, mid, true
 		}
-		return m.Chat.ID, m.MessageID, true
+		// A notification or an older panel opens a fresh panel at the bottom.
+		return m.Chat.ID, 0, false
 	}
 	if update.Message != nil {
-		ch := update.Message.Chat.ID
-		storedChat, mid, has := pr.Get(userID)
-		if has && storedChat == ch {
-			return ch, mid, true
-		}
-		return ch, 0, false
+		// Editing an earlier message does not move it to the end of the chat.
+		return update.Message.Chat.ID, 0, false
 	}
 	return 0, 0, false
 }
@@ -81,34 +78,36 @@ func sendNewPanel(bot *tgbotapi.BotAPI, pr *repository.PanelRepository, userID, 
 		log.Println("send panel:", err)
 		return false
 	}
-	if oldChatID, oldMessageID, ok := pr.Get(userID); ok && oldChatID == chatID && oldMessageID != 0 && oldMessageID != sent.MessageID {
-		_, _ = bot.Request(tgbotapi.NewDeleteMessage(oldChatID, oldMessageID))
-	}
+	oldChatID, oldMessageID, hasOldPanel := pr.Get(userID)
 	if err := pr.Set(userID, chatID, sent.MessageID); err != nil {
 		log.Println("panel persist:", err)
+		return false
+	}
+	if hasOldPanel && oldChatID == chatID && oldMessageID != 0 && oldMessageID != sent.MessageID {
+		if _, err := bot.Request(tgbotapi.NewDeleteMessage(oldChatID, oldMessageID)); err != nil {
+			// Old messages may no longer be deletable; retire their buttons instead.
+			empty := tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}}
+			_, _ = bot.Request(tgbotapi.NewEditMessageReplyMarkup(oldChatID, oldMessageID, empty))
+		}
 	}
 	return true
 }
 
 func EditPanelFromUpdate(bot *tgbotapi.BotAPI, pr *repository.PanelRepository, update tgbotapi.Update, userID int64,
 	text string, markup *tgbotapi.InlineKeyboardMarkup, disableWebPreview bool,
-) {
+) bool {
 	ch, mid, ok := PanelTarget(update, pr, userID)
 	if ch == 0 {
-		return
+		return false
 	}
 	if !ok {
 		mid = 0
 	}
 	if !EditPanelHTML(bot, pr, userID, ch, mid, text, markup, disableWebPreview) {
-		return
+		return false
 	}
-	if update.CallbackQuery != nil && update.CallbackQuery.Message != nil {
-		m := update.CallbackQuery.Message
-		if panelChat, panelMessage, has := pr.Get(userID); has && panelChat == m.Chat.ID && panelMessage != m.MessageID {
-			_, _ = bot.Request(tgbotapi.NewDeleteMessage(m.Chat.ID, m.MessageID))
-		}
-	}
+	// Notifications remain available after their button opens a panel.
+	return true
 }
 
 func EditPanelHTMLForUser(bot *tgbotapi.BotAPI, pr *repository.PanelRepository, userID int64,

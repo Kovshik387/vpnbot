@@ -21,7 +21,10 @@ create table if not exists ui_panel (
   , chat_id integer not null
   , message_id integer not null
 )`)
-	return err
+	if err != nil {
+		return err
+	}
+	return r.initUserListState()
 }
 
 func (r *PanelRepository) Set(userID, chatID int64, messageID int) error {

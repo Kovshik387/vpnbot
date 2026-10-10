@@ -40,6 +40,18 @@ func main() {
 		log.Fatal(err)
 	}
 
+	commands := tgbotapi.NewSetMyCommandsWithScope(tgbotapi.NewBotCommandScopeAllPrivateChats(),
+		tgbotapi.BotCommand{Command: "menu", Description: "Открыть меню в конце чата"},
+		tgbotapi.BotCommand{Command: "start", Description: "Главный экран"},
+		tgbotapi.BotCommand{Command: "subscribe", Description: "Моя подписка"},
+		tgbotapi.BotCommand{Command: "proxies", Description: "Прокси"},
+		tgbotapi.BotCommand{Command: "info", Description: "Настройка VPN"},
+		tgbotapi.BotCommand{Command: "help", Description: "Помощь"},
+	)
+	if _, err := bot.Request(commands); err != nil {
+		log.Println("register bot commands:", err)
+	}
+
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
@@ -158,7 +170,7 @@ func main() {
 					handler(update, bot)
 				}
 			case ui.BtnShowPanel:
-				user.StartHandler(update, bot, cfg.AdminId, panelRepo, userUC)
+				user.MenuHandler(update, bot, cfg.AdminId, panelRepo, userUC)
 			case "./start":
 				if handler, ok := commandRouter["start"]; ok {
 					handler(update, bot)
@@ -260,7 +272,7 @@ func paymentRevokedBlocksCommand(uc *usecases.UserUsecase, m *tgbotapi.Message) 
 		return false
 	}
 	switch m.Command() {
-	case "start", "subscribe", "help":
+	case "start", "menu", "subscribe", "help":
 		return false
 	default:
 		return true
