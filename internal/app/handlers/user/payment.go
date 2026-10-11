@@ -12,6 +12,9 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+const paymentScreenshotInstructions = "Пришлите <b>скриншот чека как фото</b> через галерею Telegram.\n" +
+	"PDF и изображения, отправленные файлом, не принимаются."
+
 func PaymentSeenHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 	if update.CallbackQuery == nil || update.CallbackQuery.Message == nil {
 		return
@@ -64,8 +67,8 @@ func PaymentFlowHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *us
 
 	text := "<b>💳 Оплата</b>\n\n" +
 		amountLine +
-		"Сделайте перевод на реквизиты, которые вам сообщал администратор.\n" +
-		"Затем <b>пришлите сюда скриншот</b> чека или платежа одним сообщением (фото).\n\n" +
+		"Сделайте перевод на реквизиты, которые вам сообщал администратор.\n\n" +
+		paymentScreenshotInstructions + "\n\n" +
 		"После проверки администратор продлит срок на <b>1 месяц</b>."
 	kb := ui.PaymentRevokedKeyboard()
 	EditPanelFromUpdate(bot, pr, update, uid, text, &kb, true)
@@ -77,7 +80,12 @@ func HandlePaymentPhoto(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *us
 	}
 	uid := update.Message.From.ID
 	awaiting, err := userUC.GetAwaitingPaymentScreenshot(uid)
-	if err != nil || !awaiting {
+	if err != nil {
+		log.Println("payment photo state:", err)
+		showInputError(update, bot, pr)
+		return true
+	}
+	if !awaiting {
 		return false
 	}
 

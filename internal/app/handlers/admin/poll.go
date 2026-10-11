@@ -5,27 +5,25 @@ import (
 	"VpnBot/internal/domain/model"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
-	"time"
 )
 
 func HandlePollUpdate(update tgbotapi.Update, userUC *usecases.UserUsecase) {
-	var p *tgbotapi.Poll
-
-	switch {
-	case update.Poll != nil:
-		p = update.Poll
-	case update.Message != nil && update.Message.Poll != nil:
-		p = update.Message.Poll
-	default:
+	if update.Poll == nil {
 		return
 	}
+	if err := userUC.UpdatePollResults(pollSnapshot(update.Poll)); err != nil {
+		log.Printf("failed to update poll %s: %v", update.Poll.ID, err)
+	}
+}
 
+func pollSnapshot(p *tgbotapi.Poll) *model.PollResult {
 	res := &model.PollResult{
-		PollID:         p.ID,
-		Question:       p.Question,
-		IsAnonymous:    p.IsAnonymous,
-		AllowsMultiple: p.AllowsMultipleAnswers,
-		CreatedAt:      time.Now(),
+		PollID:          p.ID,
+		Question:        p.Question,
+		IsAnonymous:     p.IsAnonymous,
+		AllowsMultiple:  p.AllowsMultipleAnswers,
+		TotalVoterCount: p.TotalVoterCount,
+		IsClosed:        p.IsClosed,
 	}
 
 	options := make([]model.PollOptionResult, len(p.Options))
@@ -37,10 +35,5 @@ func HandlePollUpdate(update tgbotapi.Update, userUC *usecases.UserUsecase) {
 		}
 	}
 	res.Options = options
-
-	if err := userUC.SavePollResults(res); err != nil {
-		log.Printf("failed to save poll results: %v", err)
-	} else {
-		log.Printf("poll %s saved/updated", res.PollID)
-	}
+	return res
 }

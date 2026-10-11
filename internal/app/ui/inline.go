@@ -25,6 +25,16 @@ func PanelShortcutKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(panelShowRow())
 }
 
+func InputHelpKeyboard() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		panelShowRow(),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❓ Помощь", "help"),
+			tgbotapi.NewInlineKeyboardButtonURL("💬 Поддержка", URLSupport),
+		),
+	)
+}
+
 func panelShowRow() []tgbotapi.InlineKeyboardButton {
 	return tgbotapi.NewInlineKeyboardRow(
 		tgbotapi.NewInlineKeyboardButtonData("🏠 Показать панель", "panel_open"),

@@ -151,7 +151,7 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config, ui *U
 			return
 		}
 
-		admin.PollResultHandler(update, bot, userUC, pollID)
+		admin.PollResultHandler(update, bot, userUC, pollID, ui.Panel)
 	}
 	baseHandlers["poll_list"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		if err := checkPermission(update, bot, config.AdminId); err != nil {
@@ -159,7 +159,7 @@ func NewCommandRouter(userUC *usecases.UserUsecase, config *config.Config, ui *U
 			return
 		}
 
-		admin.PollListHandler(update, bot, userUC)
+		admin.PollListHandler(update, bot, userUC, ui.Panel, 0)
 	}
 
 	baseHandlers["skebob"] = func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {

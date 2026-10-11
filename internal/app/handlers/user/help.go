@@ -39,8 +39,9 @@ func HelpHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, adminId int64, pr
 			"<b>Админ: рассылки</b>\n" +
 			"• <code>/say</code> — сообщение всем (попадает в «Объявления»)\n" +
 			"• <code>/logs</code> — лог из файла (меню или <code>/logs 100</code>, <code>BOT_LOG_PATHS</code>)\n" +
-			"• <code>/poll_result &lt;id&gt;</code> — итог опроса\n" +
-			"• <code>/poll_list</code> — список опросов\n\n" +
+			"• <code>/poll_result &lt;id&gt;</code> — общие результаты опроса\n" +
+			"• <code>/poll_list</code> — опросы, результаты и закрытие голосования\n" +
+			"• Для общего опроса создайте обычный анонимный опрос и ответьте на него <code>/say</code>\n\n" +
 			"<b>Админ: сервер</b>\n" +
 			"• <code>/status</code> — нагрузка\n\n" +
 			"<b>Админ: подписки</b>\n" +

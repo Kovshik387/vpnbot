@@ -4,6 +4,7 @@ import (
 	"VpnBot/internal/domain/model"
 	"VpnBot/internal/domain/ports/service"
 	"VpnBot/internal/domain/repository"
+	"VpnBot/internal/utils"
 	"fmt"
 	"strings"
 	"sync"
@@ -31,13 +32,15 @@ func NewUserUsecase(marzbanClient service.MarzbanService, yandexService service.
 }
 
 func (u *UserUsecase) SavePollResults(poll *model.PollResult) error {
-	return u.pollRepository.UpsertPollResults(
-		poll.PollID,
-		poll.Question,
-		poll.IsAnonymous,
-		poll.AllowsMultiple,
-		poll.Options,
-	)
+	return u.pollRepository.UpsertPollResults(poll)
+}
+
+func (u *UserUsecase) UpdatePollResults(poll *model.PollResult) error {
+	return u.pollRepository.UpdatePollResults(poll)
+}
+
+func (u *UserUsecase) FindPublishedPoll(sourceID string) (*model.PollResult, error) {
+	return u.pollRepository.FindPublishedPoll(sourceID)
 }
 
 func (u *UserUsecase) PollResult(pollID string) (string, error) {
@@ -50,29 +53,53 @@ func (u *UserUsecase) PollResult(pollID string) (string, error) {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("Результаты опроса:\n")
-	sb.WriteString(fmt.Sprintf("ID: `%s`\n", res.PollID))
-	sb.WriteString(fmt.Sprintf("Вопрос: %s\n\n", res.Question))
+	sb.WriteString("<b>📊 Результаты опроса</b>\n\n")
+	sb.WriteString(fmt.Sprintf("ID: <code>%s</code>\n", utils.HtmlEscape(res.PollID)))
+	sb.WriteString(fmt.Sprintf("<b>%s</b>\n", utils.HtmlEscape(res.Question)))
+	if res.IsClosed {
+		sb.WriteString("Статус: закрыт\n")
+	} else if res.MessageID > 0 {
+		sb.WriteString("Статус: открыт\n")
+	}
 
 	total := 0
 	for _, o := range res.Options {
 		total += o.Votes
 	}
 
+	voters := res.TotalVoterCount
+	if voters < 0 && !res.AllowsMultiple {
+		voters = total
+	}
+	if voters >= 0 {
+		sb.WriteString(fmt.Sprintf("Участников: <b>%d</b>\n\n", voters))
+	} else {
+		sb.WriteString("Число участников для старого опроса неизвестно.\n\n")
+	}
 	for _, o := range res.Options {
-		percent := 0
-		if total > 0 {
-			percent = int(float64(o.Votes) / float64(total) * 100)
+		percent := ""
+		if voters >= 0 {
+			value := 0.0
+			if voters > 0 {
+				value = float64(o.Votes) / float64(voters) * 100
+			}
+			percent = fmt.Sprintf(" (%.1f%%)", value)
 		}
-		sb.WriteString(fmt.Sprintf("%d) %s — %d голосов (%d%%)\n",
-			o.OptionIndex+1, o.Text, o.Votes, percent))
+		sb.WriteString(fmt.Sprintf("%d) %s — %d голосов%s\n",
+			o.OptionIndex+1, utils.HtmlEscape(o.Text), o.Votes, percent))
+	}
+	if res.AllowsMultiple && voters >= 0 {
+		sb.WriteString("\nМожно выбрать несколько ответов: сумма процентов может превышать 100%.\n")
+	}
+	if res.MessageID == 0 {
+		sb.WriteString("\nОпрос из прежней версии: общей статистики по разосланным копиям нет.\n")
 	}
 
 	return sb.String(), nil
 }
 
-func (u *UserUsecase) GetAllPolls() ([]model.PollResult, error) {
-	return u.pollRepository.ListPolls()
+func (u *UserUsecase) GetPollsPage(offset, limit int) ([]model.PollResult, error) {
+	return u.pollRepository.ListPolls(offset, limit)
 }
 
 func (u *UserUsecase) ListUsers() (model.UsersResponse, error) {

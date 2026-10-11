@@ -18,6 +18,12 @@ type CallbackHandler func(update tgbotapi.Update, bot *tgbotapi.BotAPI)
 
 func NewCallbackRouter(userUC *usecases.UserUsecase, cdUC *usecases.CooldownUsecase, config *config.Config, uir *UIRepos) map[string]CallbackHandler {
 	return map[string]CallbackHandler{
+		"polls:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+			if err := checkCallbackPermission(update, bot, config.AdminId); err != nil {
+				return
+			}
+			admin.PollsCallbackHandler(update, bot, userUC, uir.Panel)
+		},
 		"users:": func(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			if err := checkCallbackPermission(update, bot, config.AdminId); err != nil {
 				return

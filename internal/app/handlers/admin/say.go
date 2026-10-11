@@ -46,20 +46,8 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 			}
 
 		case src.Poll != nil:
-			poll := src.Poll
-			options := make([]string, len(poll.Options))
-			for i, o := range poll.Options {
-				options[i] = o.Text
-			}
-			logKind = "poll"
-			logBody = poll.Question + "\n" + strings.Join(options, " · ")
-
-			makeMsg = func(chatID int64) tgbotapi.Chattable {
-				p := tgbotapi.NewPoll(chatID, poll.Question, options...)
-				p.IsAnonymous = poll.IsAnonymous
-				p.AllowsMultipleAnswers = poll.AllowsMultipleAnswers
-				return p
-			}
+			broadcastPoll(update, bot, userUC, sayLog)
+			return
 
 		case src.Text != "":
 			text := src.Text
@@ -79,7 +67,7 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 			return
 		}
 	} else {
-		text := strings.TrimSpace(strings.TrimPrefix(msg.Text, "/say"))
+		text := strings.TrimSpace(msg.CommandArguments())
 		if text == "" {
 			_, _ = bot.Send(tgbotapi.NewMessage(msg.Chat.ID,
 				"Использование:\n"+
@@ -100,7 +88,7 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 		}
 	}
 
-	err := broadcastToActive(bot, userUC, makeMsg)
+	stats, err := broadcastToActive(bot, userUC, makeMsg)
 	if err != nil {
 		log.Println("broadcast error:", err)
 		_, _ = bot.Send(tgbotapi.NewMessage(msg.Chat.ID,
@@ -108,30 +96,46 @@ func SayCommandHandler(update tgbotapi.Update, bot *tgbotapi.BotAPI, userUC *use
 		return
 	}
 
-	if sayLog != nil && logBody != "" {
+	archived := false
+	if sayLog != nil && logBody != "" && stats.Sent > 0 {
 		if insErr := sayLog.Insert(logKind, logBody); insErr != nil {
 			log.Println("say log insert:", insErr)
+		} else {
+			archived = true
 		}
 	}
 
-	_, _ = bot.Send(tgbotapi.NewMessage(msg.Chat.ID,
-		fmt.Sprintf("Сообщение отправлено всем активным пользователям ✅\nВ лог объявлений добавлена запись (%s).", logKind)))
+	report := fmt.Sprintf("Рассылка завершена.\nДоставлено: %d\nНе доставлено: %d", stats.Sent, stats.Failed)
+	if archived {
+		report += "\nДобавлено в объявления."
+	} else if stats.Sent > 0 {
+		report += "\nНе удалось сохранить запись в объявлениях."
+	}
+	_, _ = bot.Send(tgbotapi.NewMessage(msg.Chat.ID, report))
+}
+
+type broadcastStats struct {
+	Sent   int
+	Failed int
 }
 
 func broadcastToActive(
 	bot *tgbotapi.BotAPI,
 	userUC *usecases.UserUsecase,
 	makeMsg func(chatID int64) tgbotapi.Chattable,
-) error {
+) (broadcastStats, error) {
+	var stats broadcastStats
 	users, err := userUC.ListActive()
 	if err != nil {
-		return err
+		return stats, err
 	}
 
+	seen := make(map[int64]bool)
 	for _, u := range users {
-		if u.Uid == 0 {
+		if u.Uid == 0 || seen[u.Uid] {
 			continue
 		}
+		seen[u.Uid] = true
 
 		out := makeMsg(u.Uid)
 		if out == nil {
@@ -139,10 +143,13 @@ func broadcastToActive(
 		}
 
 		if _, sendErr := bot.Send(out); sendErr != nil {
+			stats.Failed++
 			log.Printf("Не удалось отправить сообщение пользователю %s (%d): %v",
 				u.Username, u.Uid, sendErr)
+		} else {
+			stats.Sent++
 		}
 	}
 
-	return nil
+	return stats, nil
 }

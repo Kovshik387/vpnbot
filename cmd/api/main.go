@@ -54,6 +54,7 @@ func main() {
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
+	u.AllowedUpdates = []string{"message", "callback_query", "poll"}
 	updates := bot.GetUpdatesChan(u)
 
 	marzbanClient := interfaces.NewMarzbanClient(cfg.MarzbanUrl, cfg.UsernameApi, cfg.PasswordApi)
@@ -135,9 +136,11 @@ func main() {
 			_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Откройте личный чат с ботом."))
 			continue
 		}
+		if update.Message != nil && !user.HasUserInput(update.Message) {
+			continue
+		}
 
-		if update.Poll != nil || (update.Message != nil && update.Message.Poll != nil) {
-			log.Print("Действие опроса")
+		if update.Poll != nil {
 			admin.HandlePollUpdate(update, userUC)
 			continue
 		}
@@ -152,6 +155,7 @@ func main() {
 			if user.HandlePaymentPhoto(update, bot, userUC, cfg.AdminId, panelRepo) {
 				continue
 			}
+			user.UnsupportedMessageHandler(update, bot, userUC, cfg.AdminId, panelRepo)
 			continue
 
 		case update.Message != nil && update.Message.Text != "" && !update.Message.IsCommand():
@@ -159,11 +163,6 @@ func main() {
 				blockUser(update, bot, true)
 				continue
 			}
-			if paymentRevokedBlocksPlainText(userUC, update.Message) {
-				sendPaymentRevokedNotice(bot, panelRepo, update.Message.From.ID)
-				continue
-			}
-
 			switch update.Message.Text {
 			case ui.BtnCheckSubscription:
 				if handler, ok := commandRouter["subscribe"]; ok {
@@ -175,6 +174,8 @@ func main() {
 				if handler, ok := commandRouter["start"]; ok {
 					handler(update, bot)
 				}
+			default:
+				user.UnsupportedMessageHandler(update, bot, userUC, cfg.AdminId, panelRepo)
 			}
 			continue
 
@@ -224,6 +225,13 @@ func main() {
 			if !found {
 				_, _ = bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "Действие не распознано"))
 			}
+
+		case update.Message != nil:
+			if checkBlock(userUC, update.Message.Chat.ID) {
+				blockUser(update, bot, true)
+				continue
+			}
+			user.UnsupportedMessageHandler(update, bot, userUC, cfg.AdminId, panelRepo)
 		}
 	}
 
@@ -247,20 +255,6 @@ func checkBlock(uc *usecases.UserUsecase, id int64) bool {
 	}
 
 	return blocked
-}
-
-func paymentRevokedBlocksPlainText(uc *usecases.UserUsecase, m *tgbotapi.Message) bool {
-	if m == nil || m.From == nil {
-		return false
-	}
-	revoked, err := uc.CheckPaymentRevoked(m.From.ID)
-	if err != nil || !revoked {
-		return false
-	}
-	if m.Text == "./start" || m.Text == ui.BtnShowPanel || m.Text == ui.BtnCheckSubscription {
-		return false
-	}
-	return true
 }
 
 func paymentRevokedBlocksCommand(uc *usecases.UserUsecase, m *tgbotapi.Message) bool {
